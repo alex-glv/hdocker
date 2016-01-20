@@ -6,7 +6,7 @@ import (
 
 type Layer struct {
 	added    int
-	Elements []*Element
+	Elements []Element
 }
 
 type Element struct {
@@ -15,7 +15,9 @@ type Element struct {
 }
 
 type VisibleElement interface {
-	matrix() []runeMatrix
+	getMatrix() []runeMatrix
+	preserveState()
+	cleanup() []runeMatrix
 }
 
 type SelectableElement interface {
@@ -23,18 +25,21 @@ type SelectableElement interface {
 }
 
 type Word struct {
-	WordString string
-	X, Y       int
+	WordString  string
+	Width, X, Y int
+	state       []runeMatrix
 }
 
 type Table struct {
 	Cols      []string
 	Rows      []TableRow
 	ColWidths []int
+	state     []runeMatrix
 }
 
 type TableRow struct {
 	Row []string
+	Id  string
 }
 
 func (tr *TableRow) selected() {
@@ -42,15 +47,16 @@ func (tr *TableRow) selected() {
 }
 
 func NewLayer() *Layer {
-	els := make([]*Element, 0, 10)
+	els := make([]Element, 0, 10)
 	return &Layer{
 		Elements: els,
 	}
 }
 
-func NewWord(word string, x, y int) *Word {
-	return &Word{
+func NewWord(word string, width, x, y int) Word {
+	return Word{
 		WordString: word,
+		Width:      width,
 		X:          x,
 		Y:          y,
 	}
@@ -64,8 +70,8 @@ func NewTable(cols []string, rows []TableRow, widths []int) *Table {
 	}
 }
 
-func NewElement(x, y, width, height int, contents VisibleElement) *Element {
-	return &Element{
+func NewElement(x, y, width, height int, contents VisibleElement) Element {
+	return Element{
 		X:        x,
 		Y:        y,
 		Width:    width,
@@ -74,9 +80,9 @@ func NewElement(x, y, width, height int, contents VisibleElement) *Element {
 	}
 }
 
-func (l *Layer) Add(el *Element) {
+func (l *Layer) Add(el Element) {
 	if len(l.Elements) == cap(l.Elements) {
-		t := make([]*Element, len(l.Elements), (cap(l.Elements)+1)*2)
+		t := make([]Element, len(l.Elements), (cap(l.Elements)+1)*2)
 		copy(t, l.Elements)
 		l.Elements = t
 	}
@@ -88,7 +94,12 @@ func (l *Layer) Add(el *Element) {
 
 func (l *Layer) Draw() {
 	for _, v := range l.Elements {
-		runes := v.Contents.matrix()
+		runes := v.Contents.getMatrix()
+		clean := v.Contents.cleanup()
+		for _, e := range clean {
+			termbox.SetCell(e.X+v.X, e.Y+v.Y, ' ', termbox.ColorDefault, termbox.ColorDefault)
+		}
+		v.Contents.preserveState()
 		for _, e := range runes {
 			termbox.SetCell(e.X+v.X,
 				e.Y+v.Y,
@@ -99,12 +110,67 @@ func (l *Layer) Draw() {
 	}
 }
 
-func (w Word) matrix() []runeMatrix {
-	matrc := make([]runeMatrix, len(w.WordString))
-	for i := 0; i < len(w.WordString); i++ {
-		matrc[i] = NewRuneMatrix(w.X+i, w.Y, w.WordString[i], termbox.ColorDefault, termbox.ColorDefault)
+func (w *Word) getMatrix() []runeMatrix {
+	matrix := make([]runeMatrix, w.Width)
+	for i := 0; i < w.Width; i++ {
+		chru := byte(' ')
+		if i < len(w.WordString) {
+			chru = w.WordString[i]
+		}
+		matrix[i] = NewRuneMatrix(w.X+i, w.Y, chru, termbox.ColorDefault, termbox.ColorDefault)
 	}
-	return matrc
+	return matrix
+}
+
+func appendMatrix(m1, m2 []runeMatrix) []runeMatrix {
+	for _, v := range m2 {
+		m1 = append(m1, v)
+	}
+	return m1
+}
+
+func (t *Table) getMatrix() []runeMatrix {
+	// clear previous rows
+
+	matrix := make([]runeMatrix, 5)
+	c := 0
+	for e := 0; e < len(t.Cols); e++ {
+		width := t.ColWidths[e]
+		w := NewWord(t.Cols[e], width, c, 0)
+		c = c + width
+		matrix = appendMatrix(matrix, w.getMatrix())
+		matrix = append(matrix, NewRuneMatrix(c, 0, '\t', termbox.ColorDefault, termbox.ColorDefault))
+		c++
+	}
+	c = 0
+	for m := 0; m < len(t.Rows); m++ {
+		for n := 0; n < len(t.Rows[m].Row); n++ {
+			width := t.ColWidths[n]
+			w := NewWord(t.Rows[m].Row[n], width, c, m+1)
+			c = c + width
+			matrix = appendMatrix(matrix, w.getMatrix())
+			matrix = append(matrix, NewRuneMatrix(c, m+1, '\t', termbox.ColorDefault, termbox.ColorDefault))
+			c++
+		}
+		c = 0
+	}
+	return matrix
+}
+
+func (t *Table) preserveState() {
+	t.state = t.getMatrix()
+}
+
+func (t *Table) cleanup() []runeMatrix {
+	matrix := make([]runeMatrix, 0)
+	for _, v := range t.state {
+		if v.Y == 0 {
+			continue
+		}
+		matrix = append(matrix, NewRuneMatrix(v.X, v.Y, ' ', 0, 0))
+
+	}
+	return matrix
 }
 
 func NewRuneMatrix(x, y int, ch byte, fg, bg termbox.Attribute) runeMatrix {
@@ -115,43 +181,6 @@ func NewRuneMatrix(x, y int, ch byte, fg, bg termbox.Attribute) runeMatrix {
 		Fg:   fg,
 		Bg:   bg,
 	}
-}
-
-func (t Table) matrix() []runeMatrix {
-	matrc := make([]runeMatrix, 5)
-	c := 0
-	for e := 0; e < len(t.Cols); e++ {
-		width := t.ColWidths[e]
-		for i := 0; i < width; i++ {
-			chru := byte(' ')
-			if i < len(t.Cols[e]) {
-				chru = t.Cols[e][i]
-			}
-			matrc = append(matrc, NewRuneMatrix(c, 0, chru, termbox.ColorDefault, termbox.ColorDefault))
-			c++
-		}
-		c++
-		matrc = append(matrc, NewRuneMatrix(c, 0, '\t', termbox.ColorDefault, termbox.ColorDefault))
-
-	}
-	c = 0
-	for m := 0; m < len(t.Rows); m++ {
-		for n := 0; n < len(t.Rows[m].Row); n++ {
-			width := t.ColWidths[n]
-			for s := 0; s < width; s++ {
-				chru := byte(' ')
-				if s < len(t.Rows[m].Row[n]) {
-					chru = t.Rows[m].Row[n][s]
-				}
-				matrc = append(matrc, NewRuneMatrix(c, m+1, chru, termbox.ColorDefault, termbox.ColorDefault))
-				c++
-			}
-			c++
-			matrc = append(matrc, NewRuneMatrix(c, m+1, '\t', termbox.ColorDefault, termbox.ColorDefault))
-		}
-		c = 0
-	}
-	return matrc
 }
 
 type runeMatrix struct {

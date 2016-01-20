@@ -21,45 +21,64 @@ Layers
 
 */
 
-func draw() {
-	// w, h := termbox.Size()
-	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-	endpoint := "unix:///var/run/docker.sock"
+var endpoint = "unix:///var/run/docker.sock"
+
+func pollContainers(c chan []docker.APIContainers) {
 	client, _ := docker.NewClient(endpoint)
 	cnt, _ := client.ListContainers(docker.ListContainersOptions{})
+	c <- cnt
+}
+
+func redrawContainers(cnt []docker.APIContainers) []layerdraw.TableRow {
 	rows := make([]layerdraw.TableRow, 0)
 	for _, c := range cnt {
 		rows = append(rows, layerdraw.TableRow{
-			Row: []string{c.ID, c.Image, c.Status},
+			Row: []string{c.ID, c.Image, c.Status, c.Names[0]},
 		})
 	}
-	cols := []string{"ID", "Image", "Status"}
+	return rows
+}
 
-	widths := []int{10, 40, 40}
-	tbl := layerdraw.NewTable(cols, rows, widths)
-	el := layerdraw.NewElement(0, 0, 40, 40, tbl)
+func drawContainersTable(width, height int, l *layerdraw.Layer) *layerdraw.Table {
+	cols := []string{"ID", "Image", "Status", "Name"}
+	widths := []int{width / 4, width / 4, width / 4, width / 4}
+	return layerdraw.NewTable(cols, make([]layerdraw.TableRow, 0), widths)
+}
 
-	layer := layerdraw.NewLayer()
-	layer.Add(el)
-
-	layer.Draw()
-	termbox.Flush()
+func draw() {
+	// w, h := termbox.Size()
+	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 }
 
 func main() {
 	event_queue := make(chan termbox.Event)
-	// layers := make([]Layer, 5)
+	containers_queue := make(chan []docker.APIContainers)
+
+	go func() {
+		for {
+			pollContainers(containers_queue)
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+
 	go func() {
 		for {
 			event_queue <- termbox.PollEvent()
 		}
 	}()
+
 	err := termbox.Init()
 	if err != nil {
 		panic(err)
 	}
+	width, height := termbox.Size()
+	layer := layerdraw.NewLayer()
+	tbl := drawContainersTable(width, height, layer)
+	el := layerdraw.NewElement(0, 0, width, height-50, tbl)
+	layer.Add(el)
+	layer.Draw()
 	defer termbox.Close()
-	draw()
+	// draw()
 loop:
 	for {
 		select {
@@ -67,9 +86,11 @@ loop:
 			if ev.Type == termbox.EventKey && ev.Key == termbox.KeyEsc {
 				break loop
 			}
-		default:
-			draw()
-			time.Sleep(100 * time.Millisecond)
+
+		case cnt := <-containers_queue:
+			tbl.Rows = redrawContainers(cnt)
+			layer.Draw()
+			termbox.Flush()
 		}
 	}
 }
