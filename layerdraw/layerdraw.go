@@ -4,20 +4,24 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
+var DynamicContainer = 2
+
 type Layer struct {
-	added    int
-	Elements []Element
+	added      int
+	Containers []Container
 }
 
-type Element struct {
-	X, Y, Width, Height int
-	Contents            VisibleElement
+type Container struct {
+	X, Y, Width, Height, Options int
+	ContainerElements            []ContainerElement
 }
 
-type VisibleElement interface {
-	getMatrix() []runeMatrix
-	preserveState()
-	cleanup() []runeMatrix
+type Drawable interface {
+	Draw()
+}
+
+type ContainerElement interface {
+	getMatrix() []RunePos
 }
 
 type SelectableElement interface {
@@ -25,156 +29,144 @@ type SelectableElement interface {
 }
 
 type Word struct {
-	WordString  string
-	Width, X, Y int
-	state       []runeMatrix
+	WordString string
+	Width      int
+	state      []RunePos
+}
+
+type LineBreak struct {
 }
 
 type Table struct {
 	Cols      []string
 	Rows      []TableRow
 	ColWidths []int
-	state     []runeMatrix
+	state     []RunePos
+	Width     int
 }
 
-type TableRow struct {
-	Row []string
-	Id  string
+type RunePos struct {
+	X, Y int
+	Char rune
+	Fg   termbox.Attribute
+	Bg   termbox.Attribute
 }
 
-func (tr *TableRow) selected() {
-
-}
+type TableRow []string
 
 func NewLayer() *Layer {
-	els := make([]Element, 0, 10)
+	els := make([]Container, 0)
 	return &Layer{
-		Elements: els,
+		Containers: els,
 	}
 }
 
-func NewWord(word string, width, x, y int) Word {
-	return Word{
+func NewWord(word string, width int) *Word {
+	return &Word{
 		WordString: word,
 		Width:      width,
-		X:          x,
-		Y:          y,
 	}
 }
 
-func NewTable(cols []string, rows []TableRow, widths []int) *Table {
-	return &Table{
+func NewLineBreak() *LineBreak {
+	return &LineBreak{}
+}
+
+func NewTable(cols []string, rows []TableRow, widths []int, width int) *Table {
+
+	tbl := &Table{
 		Cols:      cols,
 		Rows:      rows,
 		ColWidths: widths,
+		Width:     width,
+	}
+
+	return tbl
+}
+
+func NewContainer(x, y, width, height, options int, contents ...ContainerElement) Container {
+	return Container{
+		X:                 x,
+		Y:                 y,
+		Width:             width,
+		Height:            height,
+		ContainerElements: contents,
+		Options:           options,
 	}
 }
 
-func NewElement(x, y, width, height int, contents VisibleElement) Element {
-	return Element{
-		X:        x,
-		Y:        y,
-		Width:    width,
-		Height:   height,
-		Contents: contents,
+func NewTableRow(fields ...string) TableRow {
+	row := make(TableRow, 0)
+	for _, v := range fields {
+		row = append(row, v)
 	}
+	return row
 }
 
-func (l *Layer) Add(el Element) {
-	if len(l.Elements) == cap(l.Elements) {
-		t := make([]Element, len(l.Elements), (cap(l.Elements)+1)*2)
-		copy(t, l.Elements)
-		l.Elements = t
-	}
-
-	l.Elements = l.Elements[0 : len(l.Elements)+1]
-	l.Elements[len(l.Elements)-1] = el
+func (l *Layer) Add(el Container) {
+	l.Containers = append(l.Containers, el)
 
 }
+func (c *Container) Add(el ContainerElement) {
+	c.ContainerElements = append(c.ContainerElements, el)
+}
 
-func (l *Layer) Draw() {
-	for _, v := range l.Elements {
-		runes := v.Contents.getMatrix()
-		clean := v.Contents.cleanup()
-		for _, e := range clean {
-			termbox.SetCell(e.X+v.X, e.Y+v.Y, ' ', termbox.ColorDefault, termbox.ColorDefault)
+func (c *Container) Draw() {
+	for x := 0; x < c.X; x++ { // cleanup
+		for y := 0; y < c.Y; y++ {
+			termbox.SetCell(c.X+x, c.Y+y, ' ', termbox.ColorDefault, termbox.ColorDefault)
 		}
-		v.Contents.preserveState()
-		for _, e := range runes {
-			termbox.SetCell(e.X+v.X,
-				e.Y+v.Y,
+	}
+	last := NewRunePos(c.X, c.Y, 0, 0, 0)
+	lineBreaks := 1
+	for _, v := range c.ContainerElements {
+		matrix := v.getMatrix()
+		if len(matrix) == 0 {
+			last = NewRunePos(c.X, c.Y+lineBreaks, ' ', 0, 0)
+			lineBreaks = lineBreaks + 1
+			continue
+		}
+		matrix = addConstant(matrix, last.X, last.Y)
+		for _, e := range matrix {
+			termbox.SetCell(e.X,
+				e.Y,
 				e.Char,
 				e.Fg,
 				e.Bg)
 		}
+		last = matrix[len(matrix)-1]
+
+	}
+	if DynamicContainer&c.Options == DynamicContainer {
+		c.ContainerElements = make([]ContainerElement, 0)
 	}
 }
 
-func (w *Word) getMatrix() []runeMatrix {
-	matrix := make([]runeMatrix, w.Width)
+func (l *Layer) Draw() {
+	for _, v := range l.Containers {
+		v.Draw()
+	}
+}
+
+func (w *Word) getMatrix() []RunePos {
+	matrix := make([]RunePos, w.Width)
 	for i := 0; i < w.Width; i++ {
 		chru := byte(' ')
 		if i < len(w.WordString) {
 			chru = w.WordString[i]
 		}
-		matrix[i] = NewRuneMatrix(w.X+i, w.Y, chru, termbox.ColorDefault, termbox.ColorDefault)
+		matrix[i] = NewRunePos(i, 0, chru, termbox.ColorDefault, termbox.ColorDefault)
 	}
 	return matrix
 }
 
-func appendMatrix(m1, m2 []runeMatrix) []runeMatrix {
-	for _, v := range m2 {
-		m1 = append(m1, v)
-	}
-	return m1
-}
-
-func (t *Table) getMatrix() []runeMatrix {
-	// clear previous rows
-
-	matrix := make([]runeMatrix, 5)
-	c := 0
-	for e := 0; e < len(t.Cols); e++ {
-		width := t.ColWidths[e]
-		w := NewWord(t.Cols[e], width, c, 0)
-		c = c + width
-		matrix = appendMatrix(matrix, w.getMatrix())
-		matrix = append(matrix, NewRuneMatrix(c, 0, '\t', termbox.ColorDefault, termbox.ColorDefault))
-		c++
-	}
-	c = 0
-	for m := 0; m < len(t.Rows); m++ {
-		for n := 0; n < len(t.Rows[m].Row); n++ {
-			width := t.ColWidths[n]
-			w := NewWord(t.Rows[m].Row[n], width, c, m+1)
-			c = c + width
-			matrix = appendMatrix(matrix, w.getMatrix())
-			matrix = append(matrix, NewRuneMatrix(c, m+1, '\t', termbox.ColorDefault, termbox.ColorDefault))
-			c++
-		}
-		c = 0
-	}
+func (l *LineBreak) getMatrix() []RunePos {
+	var matrix []RunePos
 	return matrix
 }
 
-func (t *Table) preserveState() {
-	t.state = t.getMatrix()
-}
-
-func (t *Table) cleanup() []runeMatrix {
-	matrix := make([]runeMatrix, 0)
-	for _, v := range t.state {
-		if v.Y == 0 {
-			continue
-		}
-		matrix = append(matrix, NewRuneMatrix(v.X, v.Y, ' ', 0, 0))
-
-	}
-	return matrix
-}
-
-func NewRuneMatrix(x, y int, ch byte, fg, bg termbox.Attribute) runeMatrix {
-	return runeMatrix{
+func NewRunePos(x, y int, ch byte, fg, bg termbox.Attribute) RunePos {
+	return RunePos{
 		X:    x,
 		Y:    y,
 		Char: rune(ch),
@@ -183,9 +175,42 @@ func NewRuneMatrix(x, y int, ch byte, fg, bg termbox.Attribute) runeMatrix {
 	}
 }
 
-type runeMatrix struct {
-	X, Y int
-	Char rune
-	Fg   termbox.Attribute
-	Bg   termbox.Attribute
+func (c *Container) AddTable(cols []string, rows []TableRow, widths []int, width int) {
+	for k, v := range cols {
+		width := widths[k]
+		c.Add(NewWord(v, width))
+		c.Add(NewWord(" ", 1))
+
+	}
+	c.Add(NewLineBreak())
+
+	for k, row := range rows {
+		for _, cell := range row {
+			width := widths[k]
+			c.Add(NewWord(cell, width))
+			c.Add(NewWord(" ", 1))
+		}
+		c.Add(NewLineBreak())
+	}
+	c.Add(NewLineBreak())
+}
+
+func appendRunePosMatrix(m1, m2 []RunePos) []RunePos {
+	for _, v := range m2 {
+		m1 = append(m1, v)
+	}
+	return m1
+}
+
+func appendRunePos(m []RunePos, p RunePos) []RunePos {
+	m = append(m, p)
+	return m
+}
+
+func addConstant(m []RunePos, x, y int) []RunePos {
+	for k, v := range m {
+		m[k].X = v.X + x
+		m[k].Y = v.Y + y
+	}
+	return m
 }

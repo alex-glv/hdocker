@@ -29,20 +29,18 @@ func pollContainers(c chan []docker.APIContainers) {
 	c <- cnt
 }
 
-func redrawContainers(cnt []docker.APIContainers) []layerdraw.TableRow {
+func getTableRows(cnt []docker.APIContainers) []layerdraw.TableRow {
 	rows := make([]layerdraw.TableRow, 0)
 	for _, c := range cnt {
-		rows = append(rows, layerdraw.TableRow{
-			Row: []string{c.ID, c.Image, c.Status, c.Names[0]},
-		})
+		rows = append(rows, layerdraw.NewTableRow(c.ID, c.Image, c.Status, c.Names[0]))
 	}
 	return rows
 }
 
-func drawContainersTable(width, height int, l *layerdraw.Layer) *layerdraw.Table {
+func drawContainersTable(width, height int) ([]string, []int) {
 	cols := []string{"ID", "Image", "Status", "Name"}
 	widths := []int{width / 4, width / 4, width / 4, width / 4}
-	return layerdraw.NewTable(cols, make([]layerdraw.TableRow, 0), widths)
+	return cols, widths
 }
 
 func draw() {
@@ -73,8 +71,8 @@ func main() {
 	}
 	width, height := termbox.Size()
 	layer := layerdraw.NewLayer()
-	tbl := drawContainersTable(width, height, layer)
-	el := layerdraw.NewElement(0, 0, width, height-50, tbl)
+	el := layerdraw.NewContainer(0, 0, width, height-50, layerdraw.DynamicContainer)
+
 	layer.Add(el)
 	layer.Draw()
 	defer termbox.Close()
@@ -88,8 +86,11 @@ loop:
 			}
 
 		case cnt := <-containers_queue:
-			tbl.Rows = redrawContainers(cnt)
-			layer.Draw()
+			cols, widths := drawContainersTable(width, height-50)
+			rows := getTableRows(cnt)
+
+			el.AddTable(cols, rows, widths, width)
+			el.Draw()
 			termbox.Flush()
 		}
 	}
