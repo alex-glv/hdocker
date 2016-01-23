@@ -86,7 +86,7 @@ loop:
 			}
 
 		case cnt := <-containers_queue:
-			cols, widths := drawContainersTable(width, height-50)
+			cols, widths := drawContainersTable(width-2, height-50)
 			rows := getTableRows(cnt)
 
 			el.AddTable(cols, rows, widths, width)

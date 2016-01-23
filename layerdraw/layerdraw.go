@@ -135,6 +135,7 @@ func (c *Container) Draw() {
 				e.Bg)
 		}
 		last = matrix[len(matrix)-1]
+		last.X = last.X + 1 // last char position X + 1
 
 	}
 	if DynamicContainer&c.Options == DynamicContainer {
