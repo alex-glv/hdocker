@@ -1,10 +1,51 @@
 package layerdraw
 
 import (
+	"fmt"
 	"github.com/nsf/termbox-go"
+	"hash/fnv"
 )
 
-var DynamicContainer = 2
+var DynamicContainer = 0x2
+
+type Node struct {
+	Prev      *Node
+	Next      *Node
+	WordStart *Word
+	WordEnd   *Word
+	Hash      uint32
+	Selected  int
+}
+
+// http://stackoverflow.com/questions/13582519/how-to-generate-hash-number-of-a-string-in-go
+func hash(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
+
+type Nodes map[uint32]Node
+
+var nodes Nodes
+var tail *Node
+
+func AddSelectableNode(start *Word, end *Word) {
+	nodeHash := hash(fmt.Sprintf("%s%s", start.WordString, end.WordString))
+	_, exists := nodes[nodeHash]
+	if exists {
+		return
+	}
+	node := Node{
+		Prev:      tail,
+		WordStart: start,
+		WordEnd:   end,
+		Hash:      nodeHash,
+	}
+	nodes[nodeHash] = node
+	tail.Next = &node
+	tail = &node
+
+}
 
 type Layer struct {
 	added      int
@@ -25,7 +66,7 @@ type ContainerElement interface {
 }
 
 type SelectableElement interface {
-	selected()
+	getGroup() string
 }
 
 type Word struct {
@@ -34,8 +75,7 @@ type Word struct {
 	state      []RunePos
 }
 
-type LineBreakType struct {
-}
+type LineBreakType struct{}
 
 type Table struct {
 	Cols      []string
