@@ -34,7 +34,7 @@ type Word struct {
 	state      []RunePos
 }
 
-type LineBreak struct {
+type LineBreakType struct {
 }
 
 type Table struct {
@@ -68,8 +68,8 @@ func NewWord(word string, width int) *Word {
 	}
 }
 
-func NewLineBreak() *LineBreak {
-	return &LineBreak{}
+func LineBreak() *LineBreakType {
+	return &LineBreakType{}
 }
 
 func NewTable(cols []string, rows []TableRow, widths []int, width int) *Table {
@@ -112,11 +112,17 @@ func (c *Container) Add(el ContainerElement) {
 }
 
 func (c *Container) Draw() {
-	for x := 0; x < c.X; x++ { // cleanup
-		for y := 0; y < c.Y; y++ {
-			termbox.SetCell(c.X+x, c.Y+y, ' ', termbox.ColorDefault, termbox.ColorDefault)
+	if DynamicContainer&c.Options == DynamicContainer {
+		for x := 0; x < c.X; x++ { // cleanup
+			for y := 0; y < c.Y; y++ {
+				termbox.SetCell(c.X+x, c.Y+y, ' ', termbox.ColorDefault, termbox.ColorDefault)
+			}
 		}
+		defer func(c *Container) {
+			c.ContainerElements = make([]ContainerElement, 0)
+		}(c)
 	}
+
 	last := NewRunePos(c.X, c.Y, 0, 0, 0)
 	lineBreaks := 1
 	for _, v := range c.ContainerElements {
@@ -138,9 +144,7 @@ func (c *Container) Draw() {
 		last.X = last.X + 1 // last char position X + 1
 
 	}
-	if DynamicContainer&c.Options == DynamicContainer {
-		c.ContainerElements = make([]ContainerElement, 0)
-	}
+
 }
 
 func (l *Layer) Draw() {
@@ -161,7 +165,7 @@ func (w *Word) getMatrix() []RunePos {
 	return matrix
 }
 
-func (l *LineBreak) getMatrix() []RunePos {
+func (l *LineBreakType) getMatrix() []RunePos {
 	var matrix []RunePos
 	return matrix
 }
@@ -176,24 +180,31 @@ func NewRunePos(x, y int, ch byte, fg, bg termbox.Attribute) RunePos {
 	}
 }
 
-func (c *Container) AddTable(cols []string, rows []TableRow, widths []int, width int) {
+func Space() *Word {
+	return NewWord(" ", 1)
+}
+
+type TableCols map[string]int
+
+func (c *Container) AddTable(cols []string, rows []TableRow, widths []int) {
+	var width int
 	for k, v := range cols {
-		width := widths[k]
+		width = widths[k]
 		c.Add(NewWord(v, width))
-		c.Add(NewWord(" ", 1))
+		c.Add(Space())
 
 	}
-	c.Add(NewLineBreak())
+	c.Add(LineBreak())
 
-	for k, row := range rows {
-		for _, cell := range row {
-			width := widths[k]
+	for _, row := range rows {
+		for k, cell := range row {
+			width = widths[k]
 			c.Add(NewWord(cell, width))
-			c.Add(NewWord(" ", 1))
+			c.Add(Space())
 		}
-		c.Add(NewLineBreak())
+		c.Add(LineBreak())
 	}
-	c.Add(NewLineBreak())
+	c.Add(LineBreak())
 }
 
 func appendRunePosMatrix(m1, m2 []RunePos) []RunePos {

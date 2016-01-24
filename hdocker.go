@@ -89,7 +89,7 @@ loop:
 			cols, widths := drawContainersTable(width-2, height-50)
 			rows := getTableRows(cnt)
 
-			el.AddTable(cols, rows, widths, width)
+			el.AddTable(cols, rows, widths)
 			el.Draw()
 			termbox.Flush()
 		}
