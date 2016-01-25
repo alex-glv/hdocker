@@ -1,51 +1,10 @@
 package layerdraw
 
 import (
-	"fmt"
 	"github.com/nsf/termbox-go"
-	"hash/fnv"
 )
 
 var DynamicContainer = 0x2
-
-type Node struct {
-	Prev      *Node
-	Next      *Node
-	WordStart *Word
-	WordEnd   *Word
-	Hash      uint32
-	Selected  int
-}
-
-// http://stackoverflow.com/questions/13582519/how-to-generate-hash-number-of-a-string-in-go
-func hash(s string) uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(s))
-	return h.Sum32()
-}
-
-type Nodes map[uint32]Node
-
-var nodes Nodes
-var tail *Node
-
-func AddSelectableNode(start *Word, end *Word) {
-	nodeHash := hash(fmt.Sprintf("%s%s", start.WordString, end.WordString))
-	_, exists := nodes[nodeHash]
-	if exists {
-		return
-	}
-	node := Node{
-		Prev:      tail,
-		WordStart: start,
-		WordEnd:   end,
-		Hash:      nodeHash,
-	}
-	nodes[nodeHash] = node
-	tail.Next = &node
-	tail = &node
-
-}
 
 type Layer struct {
 	added      int
@@ -53,16 +12,21 @@ type Layer struct {
 }
 
 type Container struct {
-	X, Y, Width, Height, Options int
-	ContainerElements            []ContainerElement
+	X, Y, Width, Height int
+	ContainerElements   []*ContainerElement
 }
 
 type Drawable interface {
 	Draw()
 }
 
-type ContainerElement interface {
+type VisibleElement interface {
 	getMatrix() []RunePos
+}
+
+type ContainerElement struct {
+	Options int
+	Element VisibleElement
 }
 
 type SelectableElement interface {
@@ -72,7 +36,6 @@ type SelectableElement interface {
 type Word struct {
 	WordString string
 	Width      int
-	state      []RunePos
 }
 
 type LineBreakType struct{}
@@ -92,12 +55,23 @@ type RunePos struct {
 	Bg   termbox.Attribute
 }
 
-type TableRow []string
+type TableRow struct {
+	Cells     []string
+	wordStart *Word
+	wordEnd   *Word
+}
 
 func NewLayer() *Layer {
 	els := make([]Container, 0)
 	return &Layer{
 		Containers: els,
+	}
+}
+
+func NewContainerElement(el VisibleElement) *ContainerElement {
+	return &ContainerElement{
+
+		Element: el,
 	}
 }
 
@@ -112,34 +86,26 @@ func LineBreak() *LineBreakType {
 	return &LineBreakType{}
 }
 
-func NewTable(cols []string, rows []TableRow, widths []int, width int) *Table {
-
-	tbl := &Table{
-		Cols:      cols,
-		Rows:      rows,
-		ColWidths: widths,
-		Width:     width,
-	}
-
-	return tbl
-}
-
-func NewContainer(x, y, width, height, options int, contents ...ContainerElement) Container {
+func NewContainer(x, y, width, height int) Container {
 	return Container{
-		X:                 x,
-		Y:                 y,
-		Width:             width,
-		Height:            height,
-		ContainerElements: contents,
-		Options:           options,
+		X:      x,
+		Y:      y,
+		Width:  width,
+		Height: height,
 	}
 }
 
-func NewTableRow(fields ...string) TableRow {
-	row := make(TableRow, 0)
-	for _, v := range fields {
-		row = append(row, v)
+func UpdateTableRow(hash string, fields ...string) {
+
+}
+
+func NewTableRow(fields ...string) *TableRow {
+	row := &TableRow{
+		Cells:     fields,
+		wordStart: &Word{},
+		wordEnd:   &Word{},
 	}
+
 	return row
 }
 
@@ -147,26 +113,26 @@ func (l *Layer) Add(el Container) {
 	l.Containers = append(l.Containers, el)
 
 }
-func (c *Container) Add(el ContainerElement) {
-	c.ContainerElements = append(c.ContainerElements, el)
+func (c *Container) Add(el VisibleElement) {
+	cel := NewContainerElement(el)
+	c.ContainerElements = append(c.ContainerElements, cel)
 }
 
 func (c *Container) Draw() {
-	if DynamicContainer&c.Options == DynamicContainer {
-		for x := 0; x < c.X; x++ { // cleanup
-			for y := 0; y < c.Y; y++ {
-				termbox.SetCell(c.X+x, c.Y+y, ' ', termbox.ColorDefault, termbox.ColorDefault)
-			}
+	for x := 0; x < c.X; x++ { // cleanup
+		for y := 0; y < c.Y; y++ {
+			termbox.SetCell(c.X+x, c.Y+y, ' ', termbox.ColorDefault, termbox.ColorDefault)
 		}
-		defer func(c *Container) {
-			c.ContainerElements = make([]ContainerElement, 0)
-		}(c)
 	}
+	defer func(c *Container) {
+		c.ContainerElements = make([]*ContainerElement, 0)
+	}(c)
 
 	last := NewRunePos(c.X, c.Y, 0, 0, 0)
 	lineBreaks := 1
 	for _, v := range c.ContainerElements {
-		matrix := v.getMatrix()
+		matrix := v.Element.getMatrix()
+
 		if len(matrix) == 0 {
 			last = NewRunePos(c.X, c.Y+lineBreaks, ' ', 0, 0)
 			lineBreaks = lineBreaks + 1
@@ -226,19 +192,36 @@ func Space() *Word {
 
 type TableCols map[string]int
 
-func (c *Container) AddTable(cols []string, rows []TableRow, widths []int) {
+func NewTable(cols []string, widths []int) *Table {
+	return &Table{
+		Cols:      cols,
+		ColWidths: widths,
+	}
+}
+
+func (c *Container) AddTableHeader(t *Table) {
 	var width int
-	for k, v := range cols {
-		width = widths[k]
+	for k, v := range t.Cols {
+		width = t.ColWidths[k]
 		c.Add(NewWord(v, width))
 		c.Add(Space())
 
 	}
 	c.Add(LineBreak())
+}
 
+func UpdateWord(w *Word, ws string, wl int) {
+	w.WordString = ws
+	w.Width = wl
+}
+
+func (c *Container) AddTableRows(t *Table, rows []*TableRow) {
+	// var firstRowWord *Word
+	// var lastRowWord *Word
+	var width int
 	for _, row := range rows {
-		for k, cell := range row {
-			width = widths[k]
+		for k, cell := range row.Cells {
+			width = t.ColWidths[k]
 			c.Add(NewWord(cell, width))
 			c.Add(Space())
 		}

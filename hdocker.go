@@ -21,7 +21,34 @@ Layers
 
 */
 
+type Node struct {
+	Prev     *Node
+	Next     *Node
+	Hash     string
+	Selected int
+	TR       layerdraw.TableRow
+}
+
+type Nodes map[string]*Node
+
+var nodes Nodes
+var tail *Node
 var endpoint = "unix:///var/run/docker.sock"
+var rowNodes *Nodes
+
+func AddSelectableNode(groupNode *Node) {
+	_, exists := nodes[groupNode.Hash]
+	if exists {
+		return
+	}
+	nodes[groupNode.Hash] = groupNode
+	if tail == nil {
+		tail = groupNode
+	} else {
+		tail.Next = groupNode
+		tail = groupNode
+	}
+}
 
 func pollContainers(c chan []docker.APIContainers) {
 	client, _ := docker.NewClient(endpoint)
@@ -29,8 +56,8 @@ func pollContainers(c chan []docker.APIContainers) {
 	c <- cnt
 }
 
-func getTableRows(cnt []docker.APIContainers) []layerdraw.TableRow {
-	rows := make([]layerdraw.TableRow, 0)
+func updateTableRows(cnt []docker.APIContainers) []*layerdraw.TableRow {
+	rows := make([]*layerdraw.TableRow, 0)
 	for _, c := range cnt {
 		rows = append(rows, layerdraw.NewTableRow(c.ID, c.Image, c.Status, c.Names[0]))
 	}
@@ -38,7 +65,7 @@ func getTableRows(cnt []docker.APIContainers) []layerdraw.TableRow {
 }
 
 func drawContainersTable(width, height int) ([]string, []int) {
-	cols := []string{"ID", "Image", "Status", "Name"}
+	cols := []string{"ID", "Image", "Created", "Name"}
 	widths := []int{width / 4, width / 4, width / 4, width / 4}
 	return cols, widths
 }
@@ -70,11 +97,21 @@ func main() {
 		panic(err)
 	}
 	width, height := termbox.Size()
-	layer := layerdraw.NewLayer()
-	el := layerdraw.NewContainer(0, 0, width, height-50, layerdraw.DynamicContainer)
+	cols, widths := drawContainersTable(width-2, height-50)
 
-	layer.Add(el)
-	layer.Draw()
+	table := layerdraw.NewTable(cols, widths)
+	headerElement := layerdraw.NewContainer(0, 0, width, 1)
+
+	layer := layerdraw.NewLayer()
+	layer.Add(headerElement)
+
+	headerElement.AddTableHeader(table)
+	headerElement.Draw()
+
+	rowsElement := layerdraw.NewContainer(0, 1, width-2, height-50)
+
+	// el.AddTable(cols, rows, widths)
+	termbox.Flush()
 	defer termbox.Close()
 	// draw()
 loop:
@@ -86,11 +123,11 @@ loop:
 			}
 
 		case cnt := <-containers_queue:
-			cols, widths := drawContainersTable(width-2, height-50)
-			rows := getTableRows(cnt)
 
-			el.AddTable(cols, rows, widths)
-			el.Draw()
+			rows := updateTableRows(cnt)
+			rowsElement.AddTableRows(table, rows)
+			rowsElement.Draw()
+
 			termbox.Flush()
 		}
 	}
