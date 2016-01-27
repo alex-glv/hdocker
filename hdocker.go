@@ -50,10 +50,10 @@ func AddSelectableNode(groupNode *Node) {
 	}
 }
 
-func pollContainers(c chan []docker.APIContainers) {
+func getRunningContainers() []docker.APIContainers {
 	client, _ := docker.NewClient(endpoint)
 	cnt, _ := client.ListContainers(docker.ListContainersOptions{})
-	c <- cnt
+	return cnt
 }
 
 func updateTableRows(cnt []docker.APIContainers) []*layerdraw.TableRow {
@@ -81,7 +81,8 @@ func main() {
 
 	go func() {
 		for {
-			pollContainers(containers_queue)
+			cnt := getRunningContainers()
+			containers_queue <- cnt
 			time.Sleep(100 * time.Millisecond)
 		}
 	}()
@@ -109,7 +110,8 @@ func main() {
 	headerElement.Draw()
 
 	rowsElement := layerdraw.NewContainer(0, 1, width-2, height-50)
-
+	rowsElement.AddTableRows(table, updateTableRows(getRunningContainers()))
+	rowsElement.Draw()
 	// el.AddTable(cols, rows, widths)
 	termbox.Flush()
 	defer termbox.Close()
@@ -127,7 +129,6 @@ loop:
 			rows := updateTableRows(cnt)
 			rowsElement.AddTableRows(table, rows)
 			rowsElement.Draw()
-
 			termbox.Flush()
 		}
 	}

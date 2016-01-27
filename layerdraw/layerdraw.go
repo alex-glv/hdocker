@@ -1,6 +1,7 @@
 package layerdraw
 
 import (
+	// "fmt"
 	"github.com/nsf/termbox-go"
 )
 
@@ -13,6 +14,8 @@ type Layer struct {
 
 type Container struct {
 	X, Y, Width, Height int
+	LineBreaksCount     int
+	LastRune            RunePos
 	ContainerElements   []*ContainerElement
 }
 
@@ -25,8 +28,9 @@ type VisibleElement interface {
 }
 
 type ContainerElement struct {
-	Options int
-	Element VisibleElement
+	RuneMatrixPos []RunePos
+	Options       int
+	Element       VisibleElement
 }
 
 type SelectableElement interface {
@@ -70,7 +74,6 @@ func NewLayer() *Layer {
 
 func NewContainerElement(el VisibleElement) *ContainerElement {
 	return &ContainerElement{
-
 		Element: el,
 	}
 }
@@ -88,10 +91,12 @@ func LineBreak() *LineBreakType {
 
 func NewContainer(x, y, width, height int) Container {
 	return Container{
-		X:      x,
-		Y:      y,
-		Width:  width,
-		Height: height,
+		X:               x,
+		Y:               y,
+		LastRune:        NewRunePos(x, y, 0, 0, 0),
+		LineBreaksCount: 0,
+		Width:           width,
+		Height:          height,
 	}
 }
 
@@ -115,41 +120,40 @@ func (l *Layer) Add(el Container) {
 }
 func (c *Container) Add(el VisibleElement) {
 	cel := NewContainerElement(el)
-	c.ContainerElements = append(c.ContainerElements, cel)
+	matrix := el.getMatrix()
+	if len(matrix) == 0 {
+		c.LastRune = NewRunePos(c.X, c.Y+c.LineBreaksCount, ' ', 0, 0)
+		c.LineBreaksCount = c.LineBreaksCount + 1
+	} else {
+		matrix = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
+		cel.RuneMatrixPos = matrix
+		c.LastRune = matrix[len(matrix)-1]
+		c.ContainerElements = append(c.ContainerElements, cel)
+	}
+}
+
+func (c *Container) Reset() {
+	c.ContainerElements = nil
+	c.LastRune = NewRunePos(c.X, c.Y, ' ', 0, 0)
+	c.LineBreaksCount = 0
 }
 
 func (c *Container) Draw() {
-	for x := 0; x < c.X; x++ { // cleanup
-		for y := 0; y < c.Y; y++ {
-			termbox.SetCell(c.X+x, c.Y+y, ' ', termbox.ColorDefault, termbox.ColorDefault)
+	for x := 0; x < c.Width; x++ { // cleanup
+		for y := 0; y < c.Height; y++ {
+			termbox.SetCell(c.X+x, c.Y+y, 0, 0, 0)
 		}
 	}
-	defer func(c *Container) {
-		c.ContainerElements = make([]*ContainerElement, 0)
-	}(c)
-
-	last := NewRunePos(c.X, c.Y, 0, 0, 0)
-	lineBreaks := 1
 	for _, v := range c.ContainerElements {
-		matrix := v.Element.getMatrix()
-
-		if len(matrix) == 0 {
-			last = NewRunePos(c.X, c.Y+lineBreaks, ' ', 0, 0)
-			lineBreaks = lineBreaks + 1
-			continue
-		}
-		matrix = addConstant(matrix, last.X, last.Y)
-		for _, e := range matrix {
+		for _, e := range v.RuneMatrixPos {
 			termbox.SetCell(e.X,
 				e.Y,
 				e.Char,
 				e.Fg,
 				e.Bg)
 		}
-		last = matrix[len(matrix)-1]
-		last.X = last.X + 1 // last char position X + 1
-
 	}
+	c.Reset()
 
 }
 
@@ -219,6 +223,8 @@ func (c *Container) AddTableRows(t *Table, rows []*TableRow) {
 	// var firstRowWord *Word
 	// var lastRowWord *Word
 	var width int
+	// c.Add(NewWord(fmt.Sprintf("%d", len(rows)), 100))
+	// c.Add(LineBreak())
 	for _, row := range rows {
 		for k, cell := range row.Cells {
 			width = t.ColWidths[k]
@@ -227,7 +233,6 @@ func (c *Container) AddTableRows(t *Table, rows []*TableRow) {
 		}
 		c.Add(LineBreak())
 	}
-	c.Add(LineBreak())
 }
 
 func appendRunePosMatrix(m1, m2 []RunePos) []RunePos {
