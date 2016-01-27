@@ -1,6 +1,7 @@
 package layerdraw
 
 import (
+	"fmt"
 	"github.com/nsf/termbox-go"
 )
 
@@ -144,8 +145,8 @@ func (c *Container) StartGroup(hash string) {
 	if !exists {
 		c.ContainerElements[c.currentGroup] = make([]*ContainerElement, 0)
 	}
+	c.groupsIndices[hash] = len(c.groupsOrder)
 	c.groupsOrder = append(c.groupsOrder, hash)
-	c.groupsIndices[hash] = len(c.groupsOrder) - 1
 }
 
 func (c *Container) StopGroup() {
@@ -159,13 +160,13 @@ func (c *Container) Reset() {
 }
 
 func (c *Container) DeleteGroup(hash string) {
-	if _, e := c.ContainerElements[hash]; e {
+	if _, e := c.ContainerElements[hash]; !e {
 		// panic("Can't remove non-existant group")
 		return
 	}
 	delete(c.ContainerElements, hash)
 	i := c.groupsIndices[hash]
-	c.groupsOrder = append(c.groupsOrder[0:i], c.groupsOrder[i+1:len(c.groupsOrder)]...)
+	c.groupsOrder = append(c.groupsOrder[:i], c.groupsOrder[i+1:]...)
 	delete(c.groupsIndices, hash)
 	c.RecalculateRunes()
 }
@@ -176,17 +177,17 @@ func (c *Container) RecalculateRunes() {
 	for _, e := range c.groupsOrder {
 		group, exists := c.ContainerElements[e]
 		if !exists {
-			panic("Groups orders is corrupt'")
+			panic(fmt.Sprintf("Groups orders is corrupt: %s; ce: %d go: %d\n%s\n%s", e, len(c.ContainerElements), len(c.groupsOrder), c.groupsOrder, c.ContainerElements))
 		}
-		for gi, v := range group {
+		for _, v := range group {
 			matrix := v.Element.getMatrix()
 			if len(matrix) == 0 {
 				c.LastRune = NewRunePos(c.X, c.Y+c.LineBreaksCount, ' ', 0, 0)
 				c.LineBreaksCount = c.LineBreaksCount + 1
 			} else {
 				matrix = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
-				// v.RuneMatrixPos = matrix
-				c.ContainerElements[e][gi].RuneMatrixPos = matrix
+				v.RuneMatrixPos = matrix
+				// c.ContainerElements[e][gi].RuneMatrixPos = matrix
 				c.LastRune = matrix[len(matrix)-1]
 			}
 		}
@@ -284,10 +285,6 @@ func UpdateWord(w *Word, ws string, wl int) {
 
 func (c *Container) AddTableRow(t *Table, row *TableRow, hash string) {
 	var width int
-
-	// c.Add(NewWord("hash", 5))
-	// c.Add(NewWord(hash, 5))
-
 	c.StartGroup(hash)
 	for k, cell := range row.Cells {
 		width = t.ColWidths[k]
@@ -296,7 +293,6 @@ func (c *Container) AddTableRow(t *Table, row *TableRow, hash string) {
 	}
 	c.Add(LineBreak())
 	c.StopGroup()
-	// c.RecalculateRunes()
 }
 
 func appendRunePosMatrix(m1, m2 []RunePos) []RunePos {

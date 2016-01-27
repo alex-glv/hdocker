@@ -52,40 +52,63 @@ func getRunningContainers() []docker.APIContainers {
 	return cnt
 }
 
-func DeleteSelectableNode(hash string) {
+func DeleteSelectableNode(hash string, nodes map[string]*Node) {
+	tbd, e := nodes[hash]
+	if !e {
+		return
+	}
 	if tail == nodes[hash] {
 		tail = nodes[hash].Prev
 	}
+	prev := tbd.Prev
+	next := tbd.Next
+	if prev != nil && next == nil {
+		prev.Next = next
+	}
+	if next != nil && prev == nil {
+		next.Prev = prev
+	}
+	if next != nil && prev != nil {
+		prev.Next = next
+		next.Prev = prev
+	}
+
 	delete(nodes, hash)
 
 }
 func updateTableRows(t *layerdraw.Table, lc *layerdraw.Container, cnt []docker.APIContainers) {
 	foundIds := make(map[string]bool)
-	for _, n := range nodes {
-		lc.DeleteGroup(n.Hash)
-	}
 
+	// for _, n := range nodes {
+	// 	lc.DeleteGroup(n.Hash)
+	// }
 	for _, c := range cnt {
-		if _, e := nodes[c.ID]; !e {
-			cNode := &Node{
-				Prev: tail,
-				Hash: c.ID,
-			}
+		lc.DeleteGroup(c.ID)
+	}
+	for _, c := range cnt {
 
-			AddSelectableNode(cNode, nodes)
-			row := layerdraw.NewTableRow(c.ID, c.Image, c.Status, c.Names[0])
-			lc.AddTableRow(t, row, c.ID)
+		// if _, e := nodes[c.ID]; !e {
+		// 	cNode := &Node{
+		// 		Prev: tail,
+		// 		Hash: c.ID,
+		// 	}
+		// 	AddSelectableNode(cNode, nodes)
+		// 	row := layerdraw.NewTableRow(c.ID, c.Image, c.Status, c.Names[0])
+		// 	lc.AddTableRow(t, row, c.ID)
 
-		}
+		// }
 
 		foundIds[c.ID] = true
+		// AddSelectableNode(cNode, nodes)
+		row := layerdraw.NewTableRow(c.ID, c.Image, c.Status, c.Names[0])
+		lc.AddTableRow(t, row, c.ID)
 	}
-	for _, n := range nodes {
-		if _, e := foundIds[n.Hash]; !e {
-			DeleteSelectableNode(n.Hash)
-			lc.DeleteGroup(n.Hash)
-		}
-	}
+	// for _, n := range nodes {
+	// 	if _, e := foundIds[n.Hash]; !e {
+	// 		DeleteSelectableNode(n.Hash, nodes)
+	// 		lc.DeleteGroup(n.Hash)
+	// 	}
+	// }
 }
 
 func drawContainersTable(width, height int) ([]string, []int) {
@@ -142,11 +165,11 @@ loop:
 				break loop
 			}
 
-			// case cnt := <-containers_queue:
-			// 	updateTableRows(table, rowsElement, cnt)
-			// 	// rowsElement.AddTableRows(table, rows)
-			// 	rowsElement.Draw()
-			// 	termbox.Flush()
+		case cnt := <-containers_queue:
+			updateTableRows(table, rowsElement, cnt)
+			// rowsElement.AddTableRows(table, rows)
+			rowsElement.Draw()
+			termbox.Flush()
 		}
 	}
 }
