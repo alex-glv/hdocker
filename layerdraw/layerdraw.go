@@ -139,8 +139,8 @@ func (c *Container) Add(el VisibleElement) {
 		if !exists {
 			c.ContainerElements[c.currentGroup] = make([]*ContainerElement, 0)
 		}
-		c.ContainerElements[c.currentGroup] = append(c.ContainerElements[c.currentGroup], cel)
 	}
+	c.ContainerElements[c.currentGroup] = append(c.ContainerElements[c.currentGroup], cel)
 }
 
 func (c *Container) StartGroup(hash string) {
@@ -169,7 +169,22 @@ func (c *Container) DeleteGroup(hash string) {
 }
 
 func (c *Container) RecalculateRunes() {
-
+	c.LineBreaksCount = 0
+	c.LastRune = NewRunePos(c.X, c.Y, ' ', 0, 0)
+	for _, e := range c.groupsOrder {
+		group := c.ContainerElements[e]
+		for _, v := range group {
+			matrix := v.Element.getMatrix()
+			if len(matrix) == 0 {
+				c.LastRune = NewRunePos(c.X, c.Y+c.LineBreaksCount, ' ', 0, 0)
+				c.LineBreaksCount = c.LineBreaksCount + 1
+			} else {
+				matrix = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
+				v.RuneMatrixPos = matrix
+				c.LastRune = matrix[len(matrix)-1]
+			}
+		}
+	}
 }
 
 func (c *Container) Draw() {
