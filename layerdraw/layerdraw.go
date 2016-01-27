@@ -1,7 +1,6 @@
 package layerdraw
 
 import (
-	// "fmt"
 	"github.com/nsf/termbox-go"
 )
 
@@ -129,22 +128,22 @@ func (c *Container) Add(el VisibleElement) {
 
 	matrix := el.getMatrix()
 	if len(matrix) == 0 {
-		c.LastRune = NewRunePos(c.X, c.Y+c.LineBreaksCount, ' ', 0, 0)
 		c.LineBreaksCount = c.LineBreaksCount + 1
+		c.LastRune = NewRunePos(c.X, c.Y+c.LineBreaksCount, ' ', 0, 0)
 	} else {
-		matrix = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
-		cel.RuneMatrixPos = matrix
-		c.LastRune = matrix[len(matrix)-1]
-		_, exists := c.ContainerElements[c.currentGroup]
-		if !exists {
-			c.ContainerElements[c.currentGroup] = make([]*ContainerElement, 0)
-		}
+		cel.RuneMatrixPos = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
+		c.LastRune = cel.RuneMatrixPos[len(cel.RuneMatrixPos)-1]
+
 	}
 	c.ContainerElements[c.currentGroup] = append(c.ContainerElements[c.currentGroup], cel)
 }
 
 func (c *Container) StartGroup(hash string) {
 	c.currentGroup = hash
+	_, exists := c.ContainerElements[c.currentGroup]
+	if !exists {
+		c.ContainerElements[c.currentGroup] = make([]*ContainerElement, 0)
+	}
 	c.groupsOrder = append(c.groupsOrder, hash)
 	c.groupsIndices[hash] = len(c.groupsOrder) - 1
 }
@@ -161,33 +160,45 @@ func (c *Container) Reset() {
 
 func (c *Container) DeleteGroup(hash string) {
 	if _, e := c.ContainerElements[hash]; e {
-		delete(c.ContainerElements, hash)
+		// panic("Can't remove non-existant group")
+		return
 	}
+	delete(c.ContainerElements, hash)
 	i := c.groupsIndices[hash]
 	c.groupsOrder = append(c.groupsOrder[0:i], c.groupsOrder[i+1:len(c.groupsOrder)]...)
 	delete(c.groupsIndices, hash)
+	c.RecalculateRunes()
 }
 
 func (c *Container) RecalculateRunes() {
 	c.LineBreaksCount = 0
-	c.LastRune = NewRunePos(c.X, c.Y, ' ', 0, 0)
+	c.LastRune = c.EmptyRunePos()
 	for _, e := range c.groupsOrder {
-		group := c.ContainerElements[e]
-		for _, v := range group {
+		group, exists := c.ContainerElements[e]
+		if !exists {
+			panic("Groups orders is corrupt'")
+		}
+		for gi, v := range group {
 			matrix := v.Element.getMatrix()
 			if len(matrix) == 0 {
 				c.LastRune = NewRunePos(c.X, c.Y+c.LineBreaksCount, ' ', 0, 0)
 				c.LineBreaksCount = c.LineBreaksCount + 1
 			} else {
 				matrix = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
-				v.RuneMatrixPos = matrix
+				// v.RuneMatrixPos = matrix
+				c.ContainerElements[e][gi].RuneMatrixPos = matrix
 				c.LastRune = matrix[len(matrix)-1]
 			}
 		}
 	}
 }
 
+func (c *Container) EmptyRunePos() RunePos {
+	return NewRunePos(c.X, c.Y, ' ', 0, 0)
+}
+
 func (c *Container) Draw() {
+	// c.RecalculateRunes()
 	for x := 0; x < c.Width; x++ { // cleanup
 		for y := 0; y < c.Height; y++ {
 			termbox.SetCell(c.X+x, c.Y+y, 0, 0, 0)
@@ -205,7 +216,7 @@ func (c *Container) Draw() {
 		}
 
 	}
-	c.Reset()
+	// c.Reset()
 
 }
 
@@ -271,20 +282,21 @@ func UpdateWord(w *Word, ws string, wl int) {
 	w.Width = wl
 }
 
-func (c *Container) AddTableRows(t *Table, rows []*TableRow) {
-	// var firstRowWord *Word
-	// var lastRowWord *Word
+func (c *Container) AddTableRow(t *Table, row *TableRow, hash string) {
 	var width int
-	// c.Add(NewWord(fmt.Sprintf("%d", len(rows)), 100))
-	// c.Add(LineBreak())
-	for _, row := range rows {
-		for k, cell := range row.Cells {
-			width = t.ColWidths[k]
-			c.Add(NewWord(cell, width))
-			c.Add(Space())
-		}
-		c.Add(LineBreak())
+
+	// c.Add(NewWord("hash", 5))
+	// c.Add(NewWord(hash, 5))
+
+	c.StartGroup(hash)
+	for k, cell := range row.Cells {
+		width = t.ColWidths[k]
+		c.Add(NewWord(cell, width))
+		c.Add(Space())
 	}
+	c.Add(LineBreak())
+	c.StopGroup()
+	// c.RecalculateRunes()
 }
 
 func appendRunePosMatrix(m1, m2 []RunePos) []RunePos {

@@ -26,17 +26,13 @@ type Node struct {
 	Next     *Node
 	Hash     string
 	Selected int
-	TR       layerdraw.TableRow
 }
 
-type Nodes map[string]*Node
-
-var nodes Nodes
+var nodes = make(map[string]*Node)
 var tail *Node
 var endpoint = "unix:///var/run/docker.sock"
-var rowNodes *Nodes
 
-func AddSelectableNode(groupNode *Node) {
+func AddSelectableNode(groupNode *Node, nodes map[string]*Node) {
 	_, exists := nodes[groupNode.Hash]
 	if exists {
 		return
@@ -56,12 +52,40 @@ func getRunningContainers() []docker.APIContainers {
 	return cnt
 }
 
-func updateTableRows(cnt []docker.APIContainers) []*layerdraw.TableRow {
-	rows := make([]*layerdraw.TableRow, 0)
-	for _, c := range cnt {
-		rows = append(rows, layerdraw.NewTableRow(c.ID, c.Image, c.Status, c.Names[0]))
+func DeleteSelectableNode(hash string) {
+	if tail == nodes[hash] {
+		tail = nodes[hash].Prev
 	}
-	return rows
+	delete(nodes, hash)
+
+}
+func updateTableRows(t *layerdraw.Table, lc *layerdraw.Container, cnt []docker.APIContainers) {
+	foundIds := make(map[string]bool)
+	for _, n := range nodes {
+		lc.DeleteGroup(n.Hash)
+	}
+
+	for _, c := range cnt {
+		if _, e := nodes[c.ID]; !e {
+			cNode := &Node{
+				Prev: tail,
+				Hash: c.ID,
+			}
+
+			AddSelectableNode(cNode, nodes)
+			row := layerdraw.NewTableRow(c.ID, c.Image, c.Status, c.Names[0])
+			lc.AddTableRow(t, row, c.ID)
+
+		}
+
+		foundIds[c.ID] = true
+	}
+	for _, n := range nodes {
+		if _, e := foundIds[n.Hash]; !e {
+			DeleteSelectableNode(n.Hash)
+			lc.DeleteGroup(n.Hash)
+		}
+	}
 }
 
 func drawContainersTable(width, height int) ([]string, []int) {
@@ -78,7 +102,7 @@ func main() {
 		for {
 			cnt := getRunningContainers()
 			containers_queue <- cnt
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(1000 * time.Millisecond)
 		}
 	}()
 
@@ -105,9 +129,8 @@ func main() {
 	headerElement.Draw()
 
 	rowsElement := layerdraw.NewContainer(0, 1, width-2, height-50)
-	rowsElement.AddTableRows(table, updateTableRows(getRunningContainers()))
+	updateTableRows(table, rowsElement, getRunningContainers())
 	rowsElement.Draw()
-	// el.AddTable(cols, rows, widths)
 	termbox.Flush()
 	defer termbox.Close()
 	// draw()
@@ -119,11 +142,11 @@ loop:
 				break loop
 			}
 
-		case cnt := <-containers_queue:
-			rows := updateTableRows(cnt)
-			rowsElement.AddTableRows(table, rows)
-			rowsElement.Draw()
-			termbox.Flush()
+			// case cnt := <-containers_queue:
+			// 	updateTableRows(table, rowsElement, cnt)
+			// 	// rowsElement.AddTableRows(table, rows)
+			// 	rowsElement.Draw()
+			// 	termbox.Flush()
 		}
 	}
 }
