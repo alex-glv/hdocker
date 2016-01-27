@@ -66,13 +66,8 @@ func updateTableRows(cnt []docker.APIContainers) []*layerdraw.TableRow {
 
 func drawContainersTable(width, height int) ([]string, []int) {
 	cols := []string{"ID", "Image", "Created", "Name"}
-	widths := []int{width / 4, width / 4, width / 4, width / 4}
+	widths := []int{width / 6, width / 3, width / 4, width / 3}
 	return cols, widths
-}
-
-func draw() {
-	// w, h := termbox.Size()
-	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 }
 
 func main() {
@@ -125,7 +120,6 @@ loop:
 			}
 
 		case cnt := <-containers_queue:
-
 			rows := updateTableRows(cnt)
 			rowsElement.AddTableRows(table, rows)
 			rowsElement.Draw()

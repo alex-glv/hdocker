@@ -6,17 +6,21 @@ import (
 )
 
 var DynamicContainer = 0x2
+var DEFAULT_GROUP = "default"
 
 type Layer struct {
 	added      int
-	Containers []Container
+	Containers []*Container
 }
 
 type Container struct {
 	X, Y, Width, Height int
 	LineBreaksCount     int
 	LastRune            RunePos
-	ContainerElements   []*ContainerElement
+	ContainerElements   map[string][]*ContainerElement
+	groupsOrder         []string
+	groupsIndices       map[string]int
+	currentGroup        string
 }
 
 type Drawable interface {
@@ -29,6 +33,7 @@ type VisibleElement interface {
 
 type ContainerElement struct {
 	RuneMatrixPos []RunePos
+	Group         string
 	Options       int
 	Element       VisibleElement
 }
@@ -60,13 +65,11 @@ type RunePos struct {
 }
 
 type TableRow struct {
-	Cells     []string
-	wordStart *Word
-	wordEnd   *Word
+	Cells []string
 }
 
 func NewLayer() *Layer {
-	els := make([]Container, 0)
+	els := make([]*Container, 0)
 	return &Layer{
 		Containers: els,
 	}
@@ -89,14 +92,18 @@ func LineBreak() *LineBreakType {
 	return &LineBreakType{}
 }
 
-func NewContainer(x, y, width, height int) Container {
-	return Container{
-		X:               x,
-		Y:               y,
-		LastRune:        NewRunePos(x, y, 0, 0, 0),
-		LineBreaksCount: 0,
-		Width:           width,
-		Height:          height,
+func NewContainer(x, y, width, height int) *Container {
+	return &Container{
+		X:                 x,
+		Y:                 y,
+		LastRune:          NewRunePos(x, y, 0, 0, 0),
+		LineBreaksCount:   0,
+		Width:             width,
+		Height:            height,
+		currentGroup:      DEFAULT_GROUP,
+		groupsOrder:       make([]string, 0),
+		groupsIndices:     make(map[string]int),
+		ContainerElements: make(map[string][]*ContainerElement),
 	}
 }
 
@@ -106,20 +113,20 @@ func UpdateTableRow(hash string, fields ...string) {
 
 func NewTableRow(fields ...string) *TableRow {
 	row := &TableRow{
-		Cells:     fields,
-		wordStart: &Word{},
-		wordEnd:   &Word{},
+		Cells: fields,
 	}
 
 	return row
 }
 
-func (l *Layer) Add(el Container) {
+func (l *Layer) Add(el *Container) {
 	l.Containers = append(l.Containers, el)
 
 }
 func (c *Container) Add(el VisibleElement) {
 	cel := NewContainerElement(el)
+	cel.Group = c.currentGroup
+
 	matrix := el.getMatrix()
 	if len(matrix) == 0 {
 		c.LastRune = NewRunePos(c.X, c.Y+c.LineBreaksCount, ' ', 0, 0)
@@ -128,14 +135,41 @@ func (c *Container) Add(el VisibleElement) {
 		matrix = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
 		cel.RuneMatrixPos = matrix
 		c.LastRune = matrix[len(matrix)-1]
-		c.ContainerElements = append(c.ContainerElements, cel)
+		_, exists := c.ContainerElements[c.currentGroup]
+		if !exists {
+			c.ContainerElements[c.currentGroup] = make([]*ContainerElement, 0)
+		}
+		c.ContainerElements[c.currentGroup] = append(c.ContainerElements[c.currentGroup], cel)
 	}
 }
 
+func (c *Container) StartGroup(hash string) {
+	c.currentGroup = hash
+	c.groupsOrder = append(c.groupsOrder, hash)
+	c.groupsIndices[hash] = len(c.groupsOrder) - 1
+}
+
+func (c *Container) StopGroup() {
+	c.currentGroup = DEFAULT_GROUP
+}
+
 func (c *Container) Reset() {
-	c.ContainerElements = nil
+	c.ContainerElements = make(map[string][]*ContainerElement)
 	c.LastRune = NewRunePos(c.X, c.Y, ' ', 0, 0)
 	c.LineBreaksCount = 0
+}
+
+func (c *Container) DeleteGroup(hash string) {
+	if _, e := c.ContainerElements[hash]; e {
+		delete(c.ContainerElements, hash)
+	}
+	i := c.groupsIndices[hash]
+	c.groupsOrder = append(c.groupsOrder[0:i], c.groupsOrder[i+1:len(c.groupsOrder)]...)
+	delete(c.groupsIndices, hash)
+}
+
+func (c *Container) RecalculateRunes() {
+
 }
 
 func (c *Container) Draw() {
@@ -144,14 +178,17 @@ func (c *Container) Draw() {
 			termbox.SetCell(c.X+x, c.Y+y, 0, 0, 0)
 		}
 	}
-	for _, v := range c.ContainerElements {
-		for _, e := range v.RuneMatrixPos {
-			termbox.SetCell(e.X,
-				e.Y,
-				e.Char,
-				e.Fg,
-				e.Bg)
+	for _, group := range c.ContainerElements {
+		for _, v := range group {
+			for _, e := range v.RuneMatrixPos {
+				termbox.SetCell(e.X,
+					e.Y,
+					e.Char,
+					e.Fg,
+					e.Bg)
+			}
 		}
+
 	}
 	c.Reset()
 
