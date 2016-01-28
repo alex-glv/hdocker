@@ -126,27 +126,20 @@ func (l *Layer) Add(el *Container) {
 func (c *Container) Add(el VisibleElement) {
 	cel := NewContainerElement(el)
 	cel.Group = c.currentGroup
-
-	matrix := el.getMatrix()
-	if len(matrix) == 0 {
-		c.LineBreaksCount = c.LineBreaksCount + 1
-		c.LastRune = NewRunePos(c.X, c.Y+c.LineBreaksCount, ' ', 0, 0)
-	} else {
-		cel.RuneMatrixPos = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
-		c.LastRune = cel.RuneMatrixPos[len(cel.RuneMatrixPos)-1]
-
+	_, exists := c.ContainerElements[c.currentGroup]
+	if !exists {
+		c.ContainerElements[c.currentGroup] = make([]*ContainerElement, 0, 1)
 	}
 	c.ContainerElements[c.currentGroup] = append(c.ContainerElements[c.currentGroup], cel)
 }
 
 func (c *Container) StartGroup(hash string) {
 	c.currentGroup = hash
-	_, exists := c.ContainerElements[c.currentGroup]
-	if !exists {
-		c.ContainerElements[c.currentGroup] = make([]*ContainerElement, 0)
+	if _, e := c.groupsIndices[hash]; !e {
+		c.groupsOrder = append(c.groupsOrder, hash)
+		c.groupsIndices[hash] = len(c.groupsOrder) - 1
 	}
-	c.groupsIndices[hash] = len(c.groupsOrder)
-	c.groupsOrder = append(c.groupsOrder, hash)
+
 }
 
 func (c *Container) StopGroup() {
@@ -160,24 +153,31 @@ func (c *Container) Reset() {
 }
 
 func (c *Container) DeleteGroup(hash string) {
-	if _, e := c.ContainerElements[hash]; !e {
-		// panic("Can't remove non-existant group")
-		return
+	if _, e := c.ContainerElements[hash]; e {
+		delete(c.ContainerElements, hash)
 	}
-	delete(c.ContainerElements, hash)
-	i := c.groupsIndices[hash]
-	c.groupsOrder = append(c.groupsOrder[:i], c.groupsOrder[i+1:]...)
-	delete(c.groupsIndices, hash)
-	c.RecalculateRunes()
+
+	if i, e := c.groupsIndices[hash]; e {
+		if i == len(c.groupsOrder)-1 {
+			c.groupsOrder = c.groupsOrder[:i]
+		} else if i == 0 {
+			c.groupsOrder = c.groupsOrder[1:]
+		} else if i > len(c.groupsOrder) {
+			panic(fmt.Sprintf("way more elements: %d, %d, %s\n%s!", i, len(c.groupsOrder), c.groupsOrder, c.groupsIndices))
+		} else {
+			c.groupsOrder = append(c.groupsOrder[:i], c.groupsOrder[i:]...)
+		}
+		delete(c.groupsIndices, hash)
+	}
 }
 
 func (c *Container) RecalculateRunes() {
 	c.LineBreaksCount = 0
 	c.LastRune = c.EmptyRunePos()
-	for _, e := range c.groupsOrder {
-		group, exists := c.ContainerElements[e]
+	for _, hash := range c.groupsOrder {
+		group, exists := c.ContainerElements[hash]
 		if !exists {
-			panic(fmt.Sprintf("Groups orders is corrupt: %s; ce: %d go: %d\n%s\n%s", e, len(c.ContainerElements), len(c.groupsOrder), c.groupsOrder, c.ContainerElements))
+			panic(fmt.Sprintf("Groups orders is corrupt: %s; ce: %d go: %d", hash, len(c.ContainerElements), len(c.groupsOrder)))
 		}
 		for _, v := range group {
 			matrix := v.Element.getMatrix()
@@ -187,7 +187,6 @@ func (c *Container) RecalculateRunes() {
 			} else {
 				matrix = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
 				v.RuneMatrixPos = matrix
-				// c.ContainerElements[e][gi].RuneMatrixPos = matrix
 				c.LastRune = matrix[len(matrix)-1]
 			}
 		}
@@ -199,7 +198,7 @@ func (c *Container) EmptyRunePos() RunePos {
 }
 
 func (c *Container) Draw() {
-	// c.RecalculateRunes()
+	c.RecalculateRunes()
 	for x := 0; x < c.Width; x++ { // cleanup
 		for y := 0; y < c.Height; y++ {
 			termbox.SetCell(c.X+x, c.Y+y, 0, 0, 0)
@@ -269,6 +268,7 @@ func NewTable(cols []string, widths []int) *Table {
 
 func (c *Container) AddTableHeader(t *Table) {
 	var width int
+	c.StartGroup("header")
 	for k, v := range t.Cols {
 		width = t.ColWidths[k]
 		c.Add(NewWord(v, width))
@@ -276,6 +276,7 @@ func (c *Container) AddTableHeader(t *Table) {
 
 	}
 	c.Add(LineBreak())
+	c.StopGroup()
 }
 
 func UpdateWord(w *Word, ws string, wl int) {
