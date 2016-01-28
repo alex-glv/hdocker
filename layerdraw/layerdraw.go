@@ -147,7 +147,6 @@ func (c *Container) StopGroup() {
 }
 
 func (c *Container) Reset() {
-	c.ContainerElements = make(map[string][]*ContainerElement)
 	c.LastRune = NewRunePos(c.X, c.Y, ' ', 0, 0)
 	c.LineBreaksCount = 0
 }
@@ -172,8 +171,7 @@ func (c *Container) DeleteGroup(hash string) {
 }
 
 func (c *Container) RecalculateRunes() {
-	c.LineBreaksCount = 0
-	c.LastRune = c.EmptyRunePos()
+	c.Reset()
 	for _, hash := range c.groupsOrder {
 		group, exists := c.ContainerElements[hash]
 		if !exists {
@@ -181,8 +179,8 @@ func (c *Container) RecalculateRunes() {
 		}
 		for _, v := range group {
 			matrix := v.Element.getMatrix()
-			if len(matrix) == 0 {
-				c.LastRune = NewRunePos(c.X, c.Y+c.LineBreaksCount, ' ', 0, 0)
+			if matrix == nil {
+				c.LastRune = NewRunePos(c.X-1, c.Y+c.LineBreaksCount, ' ', 0, 0)
 				c.LineBreaksCount = c.LineBreaksCount + 1
 			} else {
 				matrix = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
@@ -194,7 +192,7 @@ func (c *Container) RecalculateRunes() {
 }
 
 func (c *Container) EmptyRunePos() RunePos {
-	return NewRunePos(c.X, c.Y, ' ', 0, 0)
+	return NewRunePos(c.X, c.Y, 0, 0, 0)
 }
 
 func (c *Container) Draw() {
@@ -214,7 +212,6 @@ func (c *Container) Draw() {
 					e.Bg)
 			}
 		}
-
 	}
 	// c.Reset()
 
