@@ -40,6 +40,8 @@ type SelectableElement interface {
 type Word struct {
 	WordString string
 	Width      int
+	Fg         termbox.Attribute
+	Bg         termbox.Attribute
 }
 
 type LineBreakType struct{}
@@ -60,7 +62,8 @@ type RunePos struct {
 }
 
 type TableRow struct {
-	Cells []string
+	Cells    []string
+	Selected bool
 }
 
 func NewLayer() *Layer {
@@ -77,11 +80,17 @@ func NewContainerElement(el VisibleElement, group string) *ContainerElement {
 	}
 }
 
-func NewWord(word string, width int) *Word {
+func NewWord(word string, width int, fg termbox.Attribute, bg termbox.Attribute) *Word {
 	return &Word{
 		WordString: word,
 		Width:      width,
+		Fg:         fg,
+		Bg:         bg,
 	}
+}
+
+func NewWordDef(word string, width int) *Word {
+	return NewWord(word, width, 0, 0)
 }
 
 func LineBreak() *LineBreakType {
@@ -103,9 +112,10 @@ func UpdateTableRow(hash string, fields ...string) {
 
 }
 
-func NewTableRow(fields ...string) *TableRow {
+func NewTableRow(selected bool, fields ...string) *TableRow {
 	row := &TableRow{
-		Cells: fields,
+		Cells:    fields,
+		Selected: selected,
 	}
 
 	return row
@@ -139,7 +149,7 @@ func (c *Container) DeleteGroup(hash string) {
 }
 
 func (c *Container) RecalculateRunes() {
-	lastRune := NewRunePos(c.X-1, c.Y, ' ', 0, 0)
+	lastRune := NewRunePos(c.X-1, c.Y, ' ', 0, 0) // -1 so we have space between elementsn
 	lineBreaksCount := 0
 	for _, v := range c.ContainerElements {
 		matrix := v.Element.getMatrix()
@@ -178,8 +188,6 @@ func (c *Container) Draw() {
 		}
 
 	}
-	// c.Reset()
-
 }
 
 func (l *Layer) Draw() {
@@ -195,7 +203,7 @@ func (w *Word) getMatrix() []RunePos {
 		if i < len(w.WordString) {
 			chru = w.WordString[i]
 		}
-		matrix[i] = NewRunePos(i, 0, chru, termbox.ColorDefault, termbox.ColorDefault)
+		matrix[i] = NewRunePos(i, 0, chru, w.Fg, w.Bg)
 	}
 	return matrix
 }
@@ -216,7 +224,7 @@ func NewRunePos(x, y int, ch byte, fg, bg termbox.Attribute) RunePos {
 }
 
 func Space() *Word {
-	return NewWord(" ", 1)
+	return NewWordDef(" ", 1)
 }
 
 type TableCols map[string]int
@@ -230,15 +238,13 @@ func NewTable(cols []string, widths []int) *Table {
 
 func (c *Container) AddTableHeader(t *Table) {
 	var width int
-	// c.StartGroup("header")
 	for k, v := range t.Cols {
 		width = t.ColWidths[k]
-		c.Add(NewWord(v, width))
+		c.Add(NewWordDef(v, width))
 		c.Add(Space())
 
 	}
 	c.Add(LineBreak())
-	// c.StopGroup()
 }
 
 func (c *Container) AddTableRow(t *Table, row *TableRow, hash string) {
@@ -246,7 +252,12 @@ func (c *Container) AddTableRow(t *Table, row *TableRow, hash string) {
 	c.StartGroup(hash)
 	for k, cell := range row.Cells {
 		width = t.ColWidths[k]
-		c.Add(NewWord(cell, width))
+		if row.Selected {
+			c.Add(NewWord(cell, width, termbox.ColorGreen, 0))
+		} else {
+			c.Add(NewWordDef(cell, width))
+		}
+
 		c.Add(Space())
 	}
 	c.Add(LineBreak())
