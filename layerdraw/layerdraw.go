@@ -134,23 +134,24 @@ func (c *Container) Reset() {
 }
 
 func (c *Container) DeleteGroup(hash string) {
-	for k, v := range c.ContainerElements {
-		if v.Group == hash {
-			c.ContainerElements = append(c.ContainerElements[:k], c.ContainerElements[k:]...)
-			// fmt.Println("count:  ", len(c.ContainerElements))
+	newArray := make([]*ContainerElement, 0)
+	for _, v := range c.ContainerElements {
+		if v.Group != hash {
+			newArray = append(newArray, v)
 		}
 	}
+	c.ContainerElements = newArray
 }
 
 func (c *Container) RecalculateRunes() {
-	// c.Reset()
-	lastRune := NewRunePos(c.X, c.Y, ' ', 0, 0)
+	lastRune := NewRunePos(c.X-1, c.Y, ' ', 0, 0)
 	lineBreaksCount := 0
 	for _, v := range c.ContainerElements {
 		matrix := v.Element.getMatrix()
-		if matrix == nil {
-			lastRune = NewRunePos(c.X, c.Y+lineBreaksCount, ' ', 0, 0)
+		if len(matrix) == 1 && matrix[0].Char == 0 {
+			lastRune = NewRunePos(c.X-1, c.Y+lineBreaksCount, ' ', 0, 0)
 			lineBreaksCount++
+
 		} else {
 			matrix = addConstant(matrix, lastRune.X+1, lastRune.Y)
 			v.RuneMatrixPos = matrix
@@ -203,8 +204,9 @@ func (w *Word) getMatrix() []RunePos {
 }
 
 func (l *LineBreakType) getMatrix() []RunePos {
-	var matrix []RunePos
-	return matrix
+	runePosMatrix := make([]RunePos, 1, 1)
+	runePosMatrix[0] = NewRunePos(0, 0, 0, 0, 0)
+	return runePosMatrix
 }
 
 func NewRunePos(x, y int, ch byte, fg, bg termbox.Attribute) RunePos {
