@@ -1,7 +1,6 @@
 package layerdraw
 
 import (
-	"fmt"
 	"github.com/nsf/termbox-go"
 )
 
@@ -15,11 +14,7 @@ type Layer struct {
 
 type Container struct {
 	X, Y, Width, Height int
-	LineBreaksCount     int
-	LastRune            RunePos
-	ContainerElements   map[string][]*ContainerElement
-	groupsOrder         []string
-	groupsIndices       map[string]int
+	ContainerElements   []*ContainerElement
 	currentGroup        string
 }
 
@@ -75,9 +70,10 @@ func NewLayer() *Layer {
 	}
 }
 
-func NewContainerElement(el VisibleElement) *ContainerElement {
+func NewContainerElement(el VisibleElement, group string) *ContainerElement {
 	return &ContainerElement{
 		Element: el,
+		Group:   group,
 	}
 }
 
@@ -96,14 +92,10 @@ func NewContainer(x, y, width, height int) *Container {
 	return &Container{
 		X:                 x,
 		Y:                 y,
-		LastRune:          NewRunePos(x, y, 0, 0, 0),
-		LineBreaksCount:   0,
 		Width:             width,
 		Height:            height,
 		currentGroup:      DEFAULT_GROUP,
-		groupsOrder:       make([]string, 0),
-		groupsIndices:     make(map[string]int),
-		ContainerElements: make(map[string][]*ContainerElement),
+		ContainerElements: make([]*ContainerElement, 0),
 	}
 }
 
@@ -124,22 +116,12 @@ func (l *Layer) Add(el *Container) {
 
 }
 func (c *Container) Add(el VisibleElement) {
-	cel := NewContainerElement(el)
-	cel.Group = c.currentGroup
-	_, exists := c.ContainerElements[c.currentGroup]
-	if !exists {
-		c.ContainerElements[c.currentGroup] = make([]*ContainerElement, 0, 1)
-	}
-	c.ContainerElements[c.currentGroup] = append(c.ContainerElements[c.currentGroup], cel)
+	cel := NewContainerElement(el, c.currentGroup)
+	c.ContainerElements = append(c.ContainerElements, cel)
 }
 
 func (c *Container) StartGroup(hash string) {
 	c.currentGroup = hash
-	if _, e := c.groupsIndices[hash]; !e {
-		c.groupsOrder = append(c.groupsOrder, hash)
-		c.groupsIndices[hash] = len(c.groupsOrder) - 1
-	}
-
 }
 
 func (c *Container) StopGroup() {
@@ -147,46 +129,32 @@ func (c *Container) StopGroup() {
 }
 
 func (c *Container) Reset() {
-	c.LastRune = NewRunePos(c.X, c.Y, ' ', 0, 0)
-	c.LineBreaksCount = 0
+	// c.LastRune = NewRunePos(c.X, c.Y, ' ', 0, 0)
+	// c.LineBreaksCount = 0
 }
 
 func (c *Container) DeleteGroup(hash string) {
-	if _, e := c.ContainerElements[hash]; e {
-		delete(c.ContainerElements, hash)
-	}
-
-	if i, e := c.groupsIndices[hash]; e {
-		if i == len(c.groupsOrder)-1 {
-			c.groupsOrder = c.groupsOrder[:i]
-		} else if i == 0 {
-			c.groupsOrder = c.groupsOrder[1:]
-		} else if i > len(c.groupsOrder) {
-			panic(fmt.Sprintf("way more elements: %d, %d, %s\n%s!", i, len(c.groupsOrder), c.groupsOrder, c.groupsIndices))
-		} else {
-			c.groupsOrder = append(c.groupsOrder[:i], c.groupsOrder[i:]...)
+	for k, v := range c.ContainerElements {
+		if v.Group == hash {
+			c.ContainerElements = append(c.ContainerElements[:k], c.ContainerElements[k:]...)
+			// fmt.Println("count:  ", len(c.ContainerElements))
 		}
-		delete(c.groupsIndices, hash)
 	}
 }
 
 func (c *Container) RecalculateRunes() {
-	c.Reset()
-	for _, hash := range c.groupsOrder {
-		group, exists := c.ContainerElements[hash]
-		if !exists {
-			panic(fmt.Sprintf("Groups orders is corrupt: %s; ce: %d go: %d", hash, len(c.ContainerElements), len(c.groupsOrder)))
-		}
-		for _, v := range group {
-			matrix := v.Element.getMatrix()
-			if matrix == nil {
-				c.LastRune = NewRunePos(c.X-1, c.Y+c.LineBreaksCount, ' ', 0, 0)
-				c.LineBreaksCount = c.LineBreaksCount + 1
-			} else {
-				matrix = addConstant(matrix, c.LastRune.X+1, c.LastRune.Y)
-				v.RuneMatrixPos = matrix
-				c.LastRune = matrix[len(matrix)-1]
-			}
+	// c.Reset()
+	lastRune := NewRunePos(c.X, c.Y, ' ', 0, 0)
+	lineBreaksCount := 0
+	for _, v := range c.ContainerElements {
+		matrix := v.Element.getMatrix()
+		if matrix == nil {
+			lastRune = NewRunePos(c.X, c.Y+lineBreaksCount, ' ', 0, 0)
+			lineBreaksCount++
+		} else {
+			matrix = addConstant(matrix, lastRune.X+1, lastRune.Y)
+			v.RuneMatrixPos = matrix
+			lastRune = matrix[len(matrix)-1]
 		}
 	}
 }
@@ -202,16 +170,15 @@ func (c *Container) Draw() {
 			termbox.SetCell(c.X+x, c.Y+y, 0, 0, 0)
 		}
 	}
-	for _, group := range c.ContainerElements {
-		for _, v := range group {
-			for _, e := range v.RuneMatrixPos {
-				termbox.SetCell(e.X,
-					e.Y,
-					e.Char,
-					e.Fg,
-					e.Bg)
-			}
+	for _, v := range c.ContainerElements {
+		for _, e := range v.RuneMatrixPos {
+			termbox.SetCell(e.X,
+				e.Y,
+				e.Char,
+				e.Fg,
+				e.Bg)
 		}
+
 	}
 	// c.Reset()
 
