@@ -128,11 +128,6 @@ func (c *Container) StopGroup() {
 	c.currentGroup = DEFAULT_GROUP
 }
 
-func (c *Container) Reset() {
-	// c.LastRune = NewRunePos(c.X, c.Y, ' ', 0, 0)
-	// c.LineBreaksCount = 0
-}
-
 func (c *Container) DeleteGroup(hash string) {
 	newArray := make([]*ContainerElement, 0)
 	for _, v := range c.ContainerElements {
@@ -148,9 +143,9 @@ func (c *Container) RecalculateRunes() {
 	lineBreaksCount := 0
 	for _, v := range c.ContainerElements {
 		matrix := v.Element.getMatrix()
-		if len(matrix) == 1 && matrix[0].Char == 0 {
-			lastRune = NewRunePos(c.X-1, c.Y+lineBreaksCount, ' ', 0, 0)
+		if len(matrix) == 0 {
 			lineBreaksCount++
+			lastRune = NewRunePos(c.X-1, c.Y+lineBreaksCount, ' ', 0, 0)
 
 		} else {
 			matrix = addConstant(matrix, lastRune.X+1, lastRune.Y)
@@ -166,9 +161,11 @@ func (c *Container) EmptyRunePos() RunePos {
 
 func (c *Container) Draw() {
 	c.RecalculateRunes()
+	// todo: implement boundary check
+	// todo: handle resize events
 	for x := 0; x < c.Width; x++ { // cleanup
 		for y := 0; y < c.Height; y++ {
-			termbox.SetCell(c.X+x, c.Y+y, 0, 0, 0)
+			termbox.SetCell(c.X+x, c.Y+y, ' ', 0, 0)
 		}
 	}
 	for _, v := range c.ContainerElements {
@@ -204,8 +201,7 @@ func (w *Word) getMatrix() []RunePos {
 }
 
 func (l *LineBreakType) getMatrix() []RunePos {
-	runePosMatrix := make([]RunePos, 1, 1)
-	runePosMatrix[0] = NewRunePos(0, 0, 0, 0, 0)
+	runePosMatrix := make([]RunePos, 0)
 	return runePosMatrix
 }
 
@@ -234,7 +230,7 @@ func NewTable(cols []string, widths []int) *Table {
 
 func (c *Container) AddTableHeader(t *Table) {
 	var width int
-	c.StartGroup("header")
+	// c.StartGroup("header")
 	for k, v := range t.Cols {
 		width = t.ColWidths[k]
 		c.Add(NewWord(v, width))
@@ -242,12 +238,7 @@ func (c *Container) AddTableHeader(t *Table) {
 
 	}
 	c.Add(LineBreak())
-	c.StopGroup()
-}
-
-func UpdateWord(w *Word, ws string, wl int) {
-	w.WordString = ws
-	w.Width = wl
+	// c.StopGroup()
 }
 
 func (c *Container) AddTableRow(t *Table, row *TableRow, hash string) {
