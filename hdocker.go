@@ -28,35 +28,35 @@ func getRunningContainers() []docker.APIContainers {
 	return cnt
 }
 
-func updateTableRows(t *layerdraw.Table, lc *layerdraw.Container, cnt []docker.APIContainers, nodes map[string]*selectables.Node) {
+func updateTableRows(t *layerdraw.Table, lc *layerdraw.Container, cnt []docker.APIContainers, selCtx *selectables.SelectableContext) {
 	foundIds := make(map[string]bool)
-
+	nodes := selCtx.Nodes
 	for _, c := range cnt {
 		if _, e := nodes[c.ID]; !e {
 			cNode := &selectables.Node{
 				Hash:      c.ID,
 				Container: c,
 			}
-			selectables.AddSelectableNode(cNode, nodes)
+			selectables.AddSelectableNode(cNode, selCtx)
 		} else {
 			nodes[c.ID].Container = c
 		}
 		foundIds[c.ID] = true
 	}
-	node := selectables.Head
-	for i := 0; i < len(selectables.Nodes); i++ {
+	node := selCtx.Head
+
+	for i := 0; i < len(nodes); i++ {
 		lc.DeleteGroup(node.Hash)
 		if _, e := foundIds[node.Hash]; !e {
-			selectables.DeleteSelectableNode(node.Hash, selectables.Nodes)
+			selectables.DeleteSelectableNode(node.Hash, selCtx)
 
 		} else {
 			dockCont := node.Container.(docker.APIContainers)
-			row := layerdraw.NewTableRow(node.Selected, dockCont.ID, dockCont.Image, dockCont.Command, dockCont.Status, dockCont.Names[0])
+			row := layerdraw.NewTableRow(node == selCtx.CurrentSelection, dockCont.ID, dockCont.Image, dockCont.Command, dockCont.Status, dockCont.Names[0])
 			lc.AddTableRow(t, row, dockCont.ID)
 		}
 		node = node.Next
 	}
-
 }
 
 func drawContainersTable(width, height int) ([]string, []int) {
@@ -88,6 +88,7 @@ func main() {
 		panic(err)
 	}
 	width, height := termbox.Size()
+	selCtx := selectables.New()
 	cols, widths := drawContainersTable(width-2, height)
 
 	table := layerdraw.NewTable(cols, widths)
@@ -98,7 +99,7 @@ func main() {
 	headerElement.AddTableHeader(table)
 
 	rowsElement := layerdraw.NewContainer(0, 1, width-2, height)
-	updateTableRows(table, rowsElement, getRunningContainers(), selectables.Nodes)
+	updateTableRows(table, rowsElement, getRunningContainers(), selCtx)
 
 	layer.Add(headerElement)
 	layer.Add(rowsElement)
@@ -117,24 +118,24 @@ loop:
 				}
 
 				if ev.Key == termbox.KeyArrowDown || ev.Key == termbox.KeyArrowUp {
-					if len(selectables.Nodes) == 0 {
+					if len(selCtx.Nodes) == 0 {
 						break
 					}
-					if selected, e := selectables.Nodes[selectables.Selectedhash]; e {
-						if ev.Key == termbox.KeyArrowDown {
-							selected.Next.Selected = true
-							selectables.Selectedhash = selected.Next.Hash
-						} else {
-							selected.Prev.Selected = true
-							selectables.Selectedhash = selected.Prev.Hash
-						}
-						selected.Selected = false
 
-					} else if selectables.Head != nil {
-						selectables.Selectedhash = selectables.Head.Hash
-						selectables.Head.Selected = true
+					if selCtx.CurrentSelection != nil {
+						if ev.Key == termbox.KeyArrowDown {
+							selCtx.CurrentSelection = selCtx.CurrentSelection.Next
+						} else {
+							selCtx.CurrentSelection = selCtx.CurrentSelection.Prev
+						}
+
+					} else if selCtx.Head != nil {
+						selCtx.CurrentSelection = selCtx.Head
+					} else {
+						panic("Head is missing! Where's my mind?")
 					}
-					updateTableRows(table, rowsElement, getRunningContainers(), selectables.Nodes)
+
+					updateTableRows(table, rowsElement, getRunningContainers(), selCtx)
 					layer.Draw()
 					termbox.Flush()
 				}
@@ -142,7 +143,7 @@ loop:
 			}
 
 		case cnt := <-containers_queue:
-			updateTableRows(table, rowsElement, cnt, selectables.Nodes)
+			updateTableRows(table, rowsElement, cnt, selCtx)
 			layer.Draw()
 			termbox.Flush()
 		}

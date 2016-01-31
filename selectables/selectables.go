@@ -1,5 +1,7 @@
 package selectables
 
+import ()
+
 type Node struct {
 	Prev      *Node
 	Next      *Node
@@ -8,46 +10,61 @@ type Node struct {
 	Selected  bool
 }
 
-var Nodes = make(map[string]*Node)
-var Tail *Node
-var Head *Node
-var Selectedhash string
+type SelectableContext struct {
+	Nodes            map[string]*Node
+	Head             *Node
+	Tail             *Node
+	CurrentSelection *Node
+}
 
-func DeleteSelectableNode(hash string, nodes map[string]*Node) {
+func New() *SelectableContext {
+	return &SelectableContext{
+		Nodes: make(map[string]*Node),
+	}
+}
+
+func DeleteSelectableNode(hash string, context *SelectableContext) {
+	nodes := context.Nodes
 	tbd, e := nodes[hash]
 	if !e {
 		return
 	}
-	if Tail == tbd {
-		Tail = tbd.Prev
+	prev := nodes[hash].Prev
+	next := nodes[hash].Next
+
+	if context.Tail == tbd {
+		context.Tail = tbd.Prev
 	}
-	if Head == tbd {
-		Head = tbd.Next
+	if context.Head == tbd {
+		context.Head = tbd.Next
 	}
-	prev := tbd.Prev
-	next := tbd.Next
-	prev.Next = tbd.Next
-	next.Prev = tbd.Prev
+	prev.Next = next
+	next.Prev = prev
 
 	delete(nodes, hash)
 
 }
 
-func AddSelectableNode(groupNode *Node, nodes map[string]*Node) {
-	_, exists := nodes[groupNode.Hash]
-	if exists {
+func AddSelectableNode(groupNode *Node, context *SelectableContext) {
+	nodes := context.Nodes
+	if _, e := nodes[groupNode.Hash]; e {
 		return
 	}
 
-	if len(nodes) == 0 {
-		Head = groupNode
-		Tail = groupNode
+	nodes[groupNode.Hash] = groupNode
+
+	if len(nodes) == 1 {
+		context.Head = groupNode
+		context.Tail = groupNode
 	}
 
-	groupNode.Prev = Tail
-	groupNode.Next = Head
-	Head.Prev = groupNode
-	Tail.Next = groupNode
-	Tail = groupNode
-	nodes[groupNode.Hash] = groupNode
+	groupNode.Prev = context.Tail
+	groupNode.Next = context.Head
+	context.Head.Prev = groupNode
+	context.Tail.Next = groupNode
+	context.Tail = groupNode
+
+	// fmt.Println(Tail == Head)
+	// fmt.Println(Head.Prev == Head.Next)
+
 }
