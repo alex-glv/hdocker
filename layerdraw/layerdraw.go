@@ -180,11 +180,15 @@ func (c *Container) Draw() {
 	}
 	for _, v := range c.ContainerElements {
 		for _, e := range v.RuneMatrixPos {
-			termbox.SetCell(e.X,
-				e.Y,
-				e.Char,
-				e.Fg,
-				e.Bg)
+			if e.X <= c.Width+c.X && e.Y <= c.Height+c.Y {
+				termbox.SetCell(
+					e.X,
+					e.Y,
+					e.Char,
+					e.Fg,
+					e.Bg,
+				)
+			}
 		}
 
 	}
