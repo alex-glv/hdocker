@@ -6,7 +6,6 @@ import (
 
 	"github.com/alex-glv/hdocker/layerdraw"
 	// "github.com/alex-glv/hdocker/selectables"
-	"fmt"
 	"time"
 )
 
@@ -55,6 +54,7 @@ func AddSelectableNode(groupNode *Node, nodes map[string]*Node) {
 
 	groupNode.Prev = tail
 	groupNode.Next = head
+	head.Prev = groupNode
 	tail.Next = groupNode
 	tail = groupNode
 	nodes[groupNode.Hash] = groupNode
@@ -151,12 +151,8 @@ func main() {
 	rowsElement := layerdraw.NewContainer(0, 1, width-2, height-20)
 	updateTableRows(table, rowsElement, getRunningContainers(), nodes)
 
-	debugElement := layerdraw.NewContainer(0, height-2, width, 2)
-	debugTable := layerdraw.NewTable([]string{"Selected"}, []int{width})
-	debugElement.AddTableRow(debugTable, layerdraw.NewTableRow(false, "Test"), "selHash")
-
 	layer.Add(headerElement)
-	layer.Add(debugElement)
+
 	layer.Add(rowsElement)
 
 	layer.Draw()
@@ -176,14 +172,13 @@ loop:
 					if len(nodes) == 0 {
 						break
 					}
-					var line string
 					if selected, e := nodes[selectedHash]; e {
 						if ev.Key == termbox.KeyArrowDown {
 							selected.Next.Selected = true
-							line = selected.Next.Hash
+							selectedHash = selected.Next.Hash
 						} else {
 							selected.Prev.Selected = true
-							line = selected.Prev.Hash
+							selectedHash = selected.Prev.Hash
 						}
 						selected.Selected = false
 
@@ -191,10 +186,6 @@ loop:
 						selectedHash = head.Hash
 						head.Selected = true
 					}
-					debugElement.DeleteGroup("selHash")
-					debugElement.DeleteGroup("headTail")
-					debugElement.AddTableRow(debugTable, layerdraw.NewTableRow(false, line), "selHash")
-					debugElement.AddTableRow(debugTable, layerdraw.NewTableRow(false, fmt.Sprintf(head.Hash, " <> ", tail.Hash)), "headTail")
 					updateTableRows(table, rowsElement, getRunningContainers(), nodes)
 					layer.Draw()
 					termbox.Flush()
