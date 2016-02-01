@@ -49,12 +49,21 @@ func updateTableRows(t *layerdraw.Table, lc *layerdraw.Container, cnt []docker.A
 		lc.DeleteGroup(node.Hash)
 		if _, e := foundIds[node.Hash]; !e {
 			selectables.DeleteSelectableNode(node.Hash, selCtx)
-
-		} else {
-			dockCont := node.Container.(docker.APIContainers)
-			row := layerdraw.NewTableRow(node == selCtx.CurrentSelection, dockCont.ID, dockCont.Image, dockCont.Command, dockCont.Status, dockCont.Names[0])
-			lc.AddTableRow(t, row, dockCont.ID)
 		}
+		node = node.Next
+	}
+	syncRows(t, lc, selCtx)
+}
+
+func syncRows(t *layerdraw.Table, lc *layerdraw.Container, selCtx *selectables.SelectableContext) {
+	node := selCtx.Head
+	totalNodes := len(selCtx.Nodes)
+
+	for i := 0; i < totalNodes; i++ {
+		lc.DeleteGroup(node.Hash)
+		dockCont := node.Container.(docker.APIContainers)
+		row := layerdraw.NewTableRow(node == selCtx.CurrentSelection, dockCont.ID, dockCont.Image, dockCont.Command, dockCont.Status, dockCont.Names[0])
+		lc.AddTableRow(t, row, dockCont.ID)
 		node = node.Next
 	}
 }
@@ -135,7 +144,7 @@ loop:
 						panic("Head is missing! Where's my mind?")
 					}
 
-					updateTableRows(table, rowsElement, getRunningContainers(), selCtx)
+					syncRows(table, rowsElement, selCtx)
 					layer.Draw()
 					termbox.Flush()
 				}
