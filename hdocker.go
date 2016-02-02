@@ -20,11 +20,38 @@ Layers
 
 */
 
-var endpoint = "unix:///var/run/docker.sock"
+type DockerContext struct {
+	client   *docker.Client
+	endpoint string
+}
+
+var dckCtx *DockerContext
+
+func getDockerContext() *DockerContext {
+	if dckCtx == nil {
+		endpoint := "unix:///var/run/docker.sock"
+		client, err := docker.NewClient(endpoint)
+		if err != nil {
+			panic("Can't establish docker connection")
+		}
+		dckCtx = &DockerContext{
+			client:   client,
+			endpoint: endpoint,
+		}
+	}
+	return dckCtx
+}
+
+func getContainerIp(cid string) string {
+	dckCtx := getDockerContext()
+	inspect, _ := dckCtx.client.InspectContainer(cid)
+	return inspect.NetworkSettings.IPAddress
+}
 
 func getRunningContainers() []docker.APIContainers {
-	client, _ := docker.NewClient(endpoint)
-	cnt, _ := client.ListContainers(docker.ListContainersOptions{})
+	dckCtx := getDockerContext()
+	cnt, _ := dckCtx.client.ListContainers(docker.ListContainersOptions{})
+
 	return cnt
 }
 
@@ -62,16 +89,23 @@ func syncRows(t *layerdraw.Table, lc *layerdraw.Container, selCtx *selectables.S
 	for i := 0; i < totalNodes; i++ {
 		lc.DeleteGroup(node.Hash)
 		dockCont := node.Container.(docker.APIContainers)
-		row := layerdraw.NewTableRow(node == selCtx.CurrentSelection, dockCont.ID, dockCont.Image, dockCont.Command, dockCont.Status, dockCont.Names[0])
+		row := layerdraw.NewTableRow(dockCont.ID, dockCont.Image, dockCont.Command)
+		if node == selCtx.CurrentSelection {
+			row.Fg = termbox.ColorBlue
+		}
 		lc.AddTableRow(t, row, dockCont.ID)
 		node = node.Next
 	}
 }
 
 func drawContainersTable(width, height int) ([]string, []int) {
-	cols := []string{"ID", "Image", "Command", "Created", "Name"}
-	widths := []int{width / 10, width / 4, width / 4, width / 4, width / 3}
+	cols := []string{"ID", "Image", "Command"}
+	widths := []int{width / 6, width / 3, width / 2}
 	return cols, widths
+}
+
+func getContainerInspect(cnt docker.APIContainers) {
+
 }
 
 func main() {
@@ -98,23 +132,23 @@ func main() {
 	}
 	width, height := termbox.Size()
 	selCtx := selectables.New()
-	cols, widths := drawContainersTable(width-2, height)
+	layer := layerdraw.NewLayer()
+	cols, widths := drawContainersTable(width/2, height)
 
 	table := layerdraw.NewTable(cols, widths)
-	headerElement := layerdraw.NewContainer(0, 0, width, 1)
-
-	layer := layerdraw.NewLayer()
+	headerElement := layerdraw.NewContainer(0, 0, width/2, 1)
 
 	headerElement.AddTableHeader(table)
+	rowsElement := layerdraw.NewContainer(0, 1, width/2, height)
 
-	rowsElement := layerdraw.NewContainer(0, 1, width-2, height)
-	updateTableRows(table, rowsElement, getRunningContainers(), selCtx)
+	cntInfoElement := layerdraw.NewContainer(width/2, 0, width/2, 10)
+	cntInfoTable := layerdraw.NewTable([]string{"IP", "Status"}, []int{width / 4, width / 4})
+	cntInfoElement.AddTableHeader(cntInfoTable)
 
 	layer.Add(headerElement)
 	layer.Add(rowsElement)
-	layer.Draw()
+	layer.Add(cntInfoElement)
 
-	termbox.Flush()
 	defer termbox.Close()
 	// draw()
 loop:
@@ -145,6 +179,8 @@ loop:
 					}
 
 					syncRows(table, rowsElement, selCtx)
+					cntInfoElement.DeleteGroup("cntInfo")
+					cntInfoElement.AddTableRow(cntInfoTable, layerdraw.NewTableRow(getContainerIp(selCtx.CurrentSelection.Hash), ""), "cntInfo")
 					layer.Draw()
 					termbox.Flush()
 				}

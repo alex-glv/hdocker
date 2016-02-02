@@ -4,7 +4,6 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
-var DynamicContainer = 0x2
 var DEFAULT_GROUP = "default"
 
 type Layer struct {
@@ -64,6 +63,8 @@ type RunePos struct {
 type TableRow struct {
 	Cells    []string
 	Selected bool
+	Fg       termbox.Attribute
+	Bg       termbox.Attribute
 }
 
 func NewLayer() *Layer {
@@ -108,14 +109,9 @@ func NewContainer(x, y, width, height int) *Container {
 	}
 }
 
-func UpdateTableRow(hash string, fields ...string) {
-
-}
-
-func NewTableRow(selected bool, fields ...string) *TableRow {
+func NewTableRow(fields ...string) *TableRow {
 	row := &TableRow{
-		Cells:    fields,
-		Selected: selected,
+		Cells: fields,
 	}
 
 	return row
@@ -171,8 +167,6 @@ func (c *Container) EmptyRunePos() RunePos {
 
 func (c *Container) Draw() {
 	c.RecalculateRunes()
-	// todo: implement boundary check
-	// todo: handle resize events
 	for x := 0; x < c.Width; x++ { // cleanup
 		for y := 0; y < c.Height; y++ {
 			termbox.SetCell(c.X+x, c.Y+y, ' ', 0, 0)
@@ -256,11 +250,7 @@ func (c *Container) AddTableRow(t *Table, row *TableRow, hash string) {
 	c.StartGroup(hash)
 	for k, cell := range row.Cells {
 		width = t.ColWidths[k]
-		if row.Selected {
-			c.Add(NewWord(cell, width, termbox.ColorGreen, 0))
-		} else {
-			c.Add(NewWordDef(cell, width))
-		}
+		c.Add(NewWord(cell, width, row.Fg, row.Bg))
 
 		c.Add(Space())
 	}
