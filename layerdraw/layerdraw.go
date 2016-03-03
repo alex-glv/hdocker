@@ -227,11 +227,17 @@ func Space() *Word {
 
 type TableCols map[string]int
 
-func NewTable(cols []string, widths []int) *Table {
+func (c *Container) NewTable(cols []string, widths []int) *Table {
 	return &Table{
 		Cols:      cols,
 		ColWidths: widths,
 	}
+}
+
+func (c *Container) NewTableWithHeader(cols []string, widths []int) *Table {
+	table := c.NewTable(cols, widths)
+	c.AddTableHeader(table)
+	return table
 }
 
 func (c *Container) AddTableHeader(t *Table) {

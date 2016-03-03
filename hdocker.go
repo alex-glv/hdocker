@@ -5,6 +5,8 @@ import (
 	"github.com/alex-glv/hdocker/selectables"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/nsf/termbox-go"
+
+	"fmt"
 	"time"
 )
 
@@ -29,6 +31,7 @@ var dckCtx *DockerContext
 
 func getDockerContext() *DockerContext {
 	if dckCtx == nil {
+
 		endpoint := "unix:///var/run/docker.sock"
 		client, err := docker.NewClient(endpoint)
 		if err != nil {
@@ -39,12 +42,17 @@ func getDockerContext() *DockerContext {
 			endpoint: endpoint,
 		}
 	}
+
 	return dckCtx
 }
 
 func getContainerIp(cid string) string {
 	dckCtx := getDockerContext()
 	inspect, _ := dckCtx.client.InspectContainer(cid)
+	if inspect == nil {
+		return ""
+	}
+
 	return inspect.NetworkSettings.IPAddress
 }
 
@@ -88,8 +96,9 @@ func syncRows(t *layerdraw.Table, lc *layerdraw.Container, selCtx *selectables.S
 
 	for i := 0; i < totalNodes; i++ {
 		lc.DeleteGroup(node.Hash)
+
 		dockCont := node.Container.(docker.APIContainers)
-		row := layerdraw.NewTableRow(dockCont.ID, dockCont.Image, dockCont.Command)
+		row := layerdraw.NewTableRow(dockCont.ID, dockCont.Image)
 		if node == selCtx.CurrentSelection {
 			row.Fg = termbox.ColorBlue
 		}
@@ -99,13 +108,9 @@ func syncRows(t *layerdraw.Table, lc *layerdraw.Container, selCtx *selectables.S
 }
 
 func drawContainersTable(width, height int) ([]string, []int) {
-	cols := []string{"ID", "Image", "Command"}
-	widths := []int{width / 6, width / 3, width / 2}
+	cols := []string{"ID", "Image"}
+	widths := []int{width / 2, width / 2}
 	return cols, widths
-}
-
-func getContainerInspect(cnt docker.APIContainers) {
-
 }
 
 func main() {
@@ -133,17 +138,15 @@ func main() {
 	width, height := termbox.Size()
 	selCtx := selectables.New()
 	layer := layerdraw.NewLayer()
-	cols, widths := drawContainersTable(width/2, height)
+	cols, widths := drawContainersTable(width/3, height)
 
-	table := layerdraw.NewTable(cols, widths)
-	headerElement := layerdraw.NewContainer(0, 0, width/2, 1)
+	headerElement := layerdraw.NewContainer(0, 0, width/3, 1)
+	table := headerElement.NewTableWithHeader(cols, widths)
 
-	headerElement.AddTableHeader(table)
-	rowsElement := layerdraw.NewContainer(0, 1, width/2, height)
+	rowsElement := layerdraw.NewContainer(0, 1, width/3, height)
 
-	cntInfoElement := layerdraw.NewContainer(width/2, 0, width/2, 10)
-	cntInfoTable := layerdraw.NewTable([]string{"IP", "Status"}, []int{width / 4, width / 4})
-	cntInfoElement.AddTableHeader(cntInfoTable)
+	cntInfoElement := layerdraw.NewContainer(width/3+2, 0, width/2*3, 10)
+	cntInfoTable := cntInfoElement.NewTableWithHeader([]string{"IP", "Status"}, []int{width / 4, width / 4})
 
 	layer.Add(headerElement)
 	layer.Add(rowsElement)
