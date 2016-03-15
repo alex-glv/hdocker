@@ -8,7 +8,6 @@ import (
 	"github.com/fsouza/go-dockerclient"
 	"github.com/nsf/termbox-go"
 	"html/template"
-	"io/ioutil"
 	"time"
 )
 
@@ -128,39 +127,6 @@ func redrawRows(t *Table, lc *Container, selCtx *SelectableContext) {
 	}
 }
 
-func createLayout(infoBox *Container) []Column {
-	dat, err := ioutil.ReadFile("./sample.layout.json")
-	if err != nil {
-		panic(err)
-	}
-	columns := ParseLayout(dat)
-
-	curFill := 0
-	curValues := make([]int, 0, 0)
-
-	for i, v := range columns {
-		infoBox.Add(NewWordDef(v.Title, v.Width))
-		infoBox.Add(Space())
-		curValues = append(curValues, i)
-		curFill = curFill + v.Width
-		if curFill >= 100 || i == len(columns)-1 {
-			infoBox.Add(LineBreak())
-			for _, ci := range curValues {
-				columns[ci].WordRef = NewWordDef(columns[ci].Data, columns[ci].Width)
-				infoBox.Add(columns[ci].WordRef)
-				infoBox.Add(Space())
-
-			}
-			curValues = curValues[0:0]
-			curFill = 0
-			infoBox.Add(LineBreak())
-		}
-
-	}
-
-	return columns
-}
-
 func main() {
 	event_queue := make(chan termbox.Event)
 	containers_queue := make(chan []docker.APIContainers)
@@ -195,7 +161,7 @@ func main() {
 	rowsElement := NewContainer(0, 1, 50, height)
 
 	contInfo := NewContainer(52, 0, 100, 30)
-	columns := createLayout(contInfo)
+	columns := Createlayout(contInfo)
 
 	layer.Add(headerElement)
 	layer.Add(rowsElement)

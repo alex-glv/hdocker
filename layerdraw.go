@@ -137,10 +137,6 @@ func (c *Container) Add(el VisibleElement) {
 	c.ContainerElements = append(c.ContainerElements, cel)
 }
 
-func (c *Container) AddPair(el VisibleElement, el VisibleElement) {
-
-}
-
 func (c *Container) StartGroup(hash string) {
 	c.currentGroup = hash
 }
