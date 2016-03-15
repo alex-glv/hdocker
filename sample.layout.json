@@ -1,0 +1,17 @@
+[
+    {
+	"Width": 100,
+	"Title" : "IPAddress",
+	"Data": "{{ .NetworkSettings.IPAddress }}"
+    },
+    {
+	"Width": 100,
+	"Title": "Command",
+	"Data": "{{ .Path }}"
+    },
+    {
+	"Width": 100,
+	"Title": "Args",
+	"Data": "{{ .Args }}"
+    }
+] 

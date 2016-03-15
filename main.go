@@ -1,11 +1,14 @@
 package main
 
 import (
-	// "fmt"
+
 	// "github.com/alex-glv/hdocker/drawable" //
+	"bytes"
+	"fmt"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/nsf/termbox-go"
-	"strings"
+	"html/template"
+	"io/ioutil"
 	"time"
 )
 
@@ -29,6 +32,7 @@ type DockerContext struct {
 var dckCtx *DockerContext
 
 func getDockerContext() *DockerContext {
+
 	if dckCtx == nil {
 		endpoint := "unix:///var/run/docker.sock"
 		client, err := docker.NewClient(endpoint)
@@ -44,30 +48,25 @@ func getDockerContext() *DockerContext {
 	return dckCtx
 }
 
-func getContainerIp(cid string) string {
+func inspectContainer(cid string, templ string) string {
 	dckCtx := getDockerContext()
 	inspect, _ := dckCtx.client.InspectContainer(cid)
+
 	if inspect == nil {
 		return ""
 	}
 
-	return inspect.NetworkSettings.IPAddress
-}
+	tpl, err := template.New("container").Parse(templ)
 
-func getContainerCmd(cid string) string {
-	dckCtx := getDockerContext()
-
-	inspect, _ := dckCtx.client.InspectContainer(cid)
-	if inspect == nil {
-		return ""
+	if err != nil {
+		panic(fmt.Sprintf("can't parse: %s", templ))
 	}
 
-	cmdArr := make([]string, 1)
-	cmdArr[0] = inspect.Path
-	cmdArr = append(cmdArr, inspect.Args...)
-	return strings.Join(cmdArr, " ")
+	buf := new(bytes.Buffer)
+	tpl.Execute(buf, inspect)
 
-	// return inspect.
+	return buf.String()
+
 }
 
 func killContainer(cid string) {
@@ -88,6 +87,7 @@ func updateTableRows(t *Table, lc *Container, cnt []docker.APIContainers, selCtx
 	foundIds := make(map[string]bool)
 	nodes := selCtx.Nodes
 	for _, c := range cnt {
+
 		if _, e := nodes[c.ID]; !e {
 			cNode := &Node{
 				Hash:      c.ID,
@@ -128,6 +128,39 @@ func redrawRows(t *Table, lc *Container, selCtx *SelectableContext) {
 	}
 }
 
+func createLayout(infoBox *Container) []Column {
+	dat, err := ioutil.ReadFile("./sample.layout.json")
+	if err != nil {
+		panic(err)
+	}
+	columns := ParseLayout(dat)
+
+	curFill := 0
+	curValues := make([]int, 0, 0)
+
+	for i, v := range columns {
+		infoBox.Add(NewWordDef(v.Title, v.Width))
+		infoBox.Add(Space())
+		curValues = append(curValues, i)
+		curFill = curFill + v.Width
+		if curFill >= 100 || i == len(columns)-1 {
+			infoBox.Add(LineBreak())
+			for _, ci := range curValues {
+				columns[ci].WordRef = NewWordDef(columns[ci].Data, columns[ci].Width)
+				infoBox.Add(columns[ci].WordRef)
+				infoBox.Add(Space())
+
+			}
+			curValues = curValues[0:0]
+			curFill = 0
+			infoBox.Add(LineBreak())
+		}
+
+	}
+
+	return columns
+}
+
 func main() {
 	event_queue := make(chan termbox.Event)
 	containers_queue := make(chan []docker.APIContainers)
@@ -155,23 +188,14 @@ func main() {
 	layer := NewLayer()
 
 	cols := []string{"ID", "Image"}
-	widths := []int{10, 50}
+	widths := []int{10, 40}
 
-	headerElement := NewContainer(0, 0, 60, 1)
+	headerElement := NewContainer(0, 0, 50, 1)
 	table := headerElement.NewTableWithHeader(cols, widths)
+	rowsElement := NewContainer(0, 1, 50, height)
 
-	rowsElement := NewContainer(0, 1, 60, height)
-
-	ip := NewWordDef("", 50)
-	cmd := NewWordDef("", 50)
-	contInfo := NewContainer(62, 0, 50, 30)
-	contInfo.Add(NewWordDef("IP", 50))
-	contInfo.Add(LineBreak())
-	contInfo.Add(ip)
-	contInfo.Add(LineBreak())
-	contInfo.Add(NewWordDef("Command", 50))
-	contInfo.Add(LineBreak())
-	contInfo.Add(cmd)
+	contInfo := NewContainer(52, 0, 100, 30)
+	columns := createLayout(contInfo)
 
 	layer.Add(headerElement)
 	layer.Add(rowsElement)
@@ -193,7 +217,8 @@ loop:
 
 				if ev.Key == termbox.KeyArrowDown || ev.Key == termbox.KeyArrowUp {
 					if len(selCtx.Nodes) == 0 {
-						ip.WordString = ""
+						// ip.WordString = ""
+						// todo: nullify all layout fields
 						break
 					}
 
@@ -211,9 +236,10 @@ loop:
 					}
 
 					redrawRows(table, rowsElement, selCtx)
-					ip.WordString = getContainerIp(selCtx.CurrentSelection.Hash)
-					cmd.WordString = getContainerCmd(selCtx.CurrentSelection.Hash)
 
+					for _, cl := range columns {
+						cl.WordRef.WordString = inspectContainer(selCtx.CurrentSelection.Hash, cl.Data)
+					}
 					layer.Draw()
 					termbox.Flush()
 				}
