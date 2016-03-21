@@ -5,10 +5,11 @@ import (
 	// "github.com/alex-glv/hdocker/drawable" //
 	"bytes"
 	"fmt"
-	"github.com/fsouza/go-dockerclient"
-	"github.com/nsf/termbox-go"
 	"html/template"
 	"time"
+
+	"github.com/fsouza/go-dockerclient"
+	"github.com/nsf/termbox-go"
 )
 
 /*
@@ -31,7 +32,6 @@ type DockerContext struct {
 var dckCtx *DockerContext
 
 func getDockerContext() *DockerContext {
-
 	if dckCtx == nil {
 		endpoint := "unix:///var/run/docker.sock"
 		client, err := docker.NewClient(endpoint)
@@ -149,18 +149,18 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_, height := termbox.Size()
+	width, height := termbox.Size()
 	selCtx := NewSelectablesContext()
 	layer := NewLayer()
 
 	cols := []string{"ID", "Image"}
-	widths := []int{10, 40}
+	widths := []int{(width * 1 / 3) * 1 / 4, (width * 1 / 3) * 3 / 4}
 
-	headerElement := NewContainer(0, 0, 50, 1)
+	headerElement := NewContainer(0, 0, (width * 1 / 3), 1)
 	table := headerElement.NewTableWithHeader(cols, widths)
-	rowsElement := NewContainer(0, 1, 50, height)
+	rowsElement := NewContainer(0, 1, (width * 1 / 3), height)
 
-	contInfo := NewContainer(52, 0, 100, 30)
+	contInfo := NewContainer(width*1/3+1, 0, width*3/2, 30)
 	columns := Createlayout(contInfo)
 
 	layer.Add(headerElement)

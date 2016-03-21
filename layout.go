@@ -3,12 +3,17 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
+	"log"
+	"os"
 )
 
+var logFile, _ = os.Create("/tmp/log.out")
+var logger = log.New(logFile, "", 0)
+
 type Column struct {
-	Width   int    `json: "Width"`
-	Title   string `json: "Title"`
-	Data    string `json: "Data"`
+	Width   float32 `json: "Width"`
+	Title   string  `json: "Title"`
+	Data    string  `json: "Data"`
 	WordRef *Word
 }
 
@@ -26,20 +31,26 @@ func Createlayout(infoBox *Container) []Column {
 	if err != nil {
 		panic(err)
 	}
+	logger.Println("Init CreateLayout with: W:", infoBox.Width, ", Start:", infoBox.X)
 	columns := ParseLayout(dat)
-
-	curFill := 0
+	curFill := float32(0)
 	curValues := make([]int, 0, 0)
-
+	logger.Println("Columns:")
+	logger.Println(columns)
 	for i, v := range columns {
-		infoBox.Add(NewWordDef(v.Title, v.Width))
+		logger.Println("Adding:", v.Title, ", w:", int(v.Width*float32(infoBox.Width)))
+		infoBox.Add(NewWordDef(v.Title, int(v.Width*float32(infoBox.Width))))
 		infoBox.Add(Space())
 		curValues = append(curValues, i)
 		curFill = curFill + v.Width
-		if curFill >= 100 || i == len(columns)-1 {
+		logger.Println("Fill:", curFill)
+		if curFill == 1 || i == len(columns)-1 {
 			infoBox.Add(LineBreak())
 			for _, ci := range curValues {
-				columns[ci].WordRef = NewWordDef(columns[ci].Data, columns[ci].Width)
+				logger.Println("Dumping:", columns[ci].Data, ", w:", int(columns[ci].Width*float32(infoBox.Width)))
+				// logger.Println(ci)
+
+				columns[ci].WordRef = NewWordDef(columns[ci].Data, int(columns[ci].Width*float32(infoBox.Width)))
 				infoBox.Add(columns[ci].WordRef)
 				infoBox.Add(Space())
 
@@ -48,7 +59,6 @@ func Createlayout(infoBox *Container) []Column {
 			curFill = 0
 			infoBox.Add(LineBreak())
 		}
-
 	}
 
 	return columns
