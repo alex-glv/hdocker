@@ -3,12 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
-	"os"
 )
-
-var logFile, _ = os.Create("/tmp/log.out")
-var logger = log.New(logFile, "", 0)
 
 type Column struct {
 	Width   float32 `json: "Width"`

@@ -6,11 +6,17 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"os"
 	"time"
+
+	"log"
 
 	"github.com/fsouza/go-dockerclient"
 	"github.com/nsf/termbox-go"
 )
+
+var logFile, _ = os.Create("/tmp/log.out")
+var logger = log.New(logFile, "", 0)
 
 /*
 
@@ -150,6 +156,7 @@ func main() {
 		panic(err)
 	}
 	width, height := termbox.Size()
+	logger.Println("Canvas w:", width, ", h:", height)
 	selCtx := NewSelectablesContext()
 	layer := NewLayer()
 
@@ -160,7 +167,7 @@ func main() {
 	table := headerElement.NewTableWithHeader(cols, widths)
 	rowsElement := NewContainer(0, 1, (width * 1 / 3), height)
 
-	contInfo := NewContainer(width*1/3+1, 0, width*3/2, 30)
+	contInfo := NewContainer(width*1/3+1, 0, width*2/3, 30)
 	columns := Createlayout(contInfo)
 
 	layer.Add(headerElement)
