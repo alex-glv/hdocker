@@ -92,7 +92,6 @@ func updateTableRows(t *Table, lc *Container, cnt []docker.APIContainers, selCtx
 	foundIds := make(map[string]bool)
 	nodes := selCtx.Nodes
 	for _, c := range cnt {
-
 		if _, e := nodes[c.ID]; !e {
 			cNode := &Node{
 				Hash:      c.ID,
@@ -113,6 +112,7 @@ func updateTableRows(t *Table, lc *Container, cnt []docker.APIContainers, selCtx
 		}
 		node = node.Next
 	}
+	logger.Println("new length:", len(selCtx.Nodes))
 	redrawRows(t, lc, selCtx)
 }
 
@@ -186,30 +186,14 @@ loop:
 				}
 				if ev.Key == termbox.KeyCtrlX {
 					killContainer(selCtx.CurrentSelection.Hash)
+					break loop
 				}
 
 				if ev.Key == termbox.KeyArrowDown || ev.Key == termbox.KeyArrowUp {
-					if len(selCtx.Nodes) == 0 {
-						// ip.WordString = ""
-						// todo: nullify all layout fields
-						break
-					}
-
-					if selCtx.CurrentSelection != nil {
-						if ev.Key == termbox.KeyArrowDown {
-							selCtx.CurrentSelection = selCtx.CurrentSelection.Next
-						} else {
-							selCtx.CurrentSelection = selCtx.CurrentSelection.Prev
-						}
-
-					} else if selCtx.Head != nil {
-						selCtx.CurrentSelection = selCtx.Head
-					} else {
-						panic("Head is missing! Where's my mind?")
-					}
-
+					logger.Println("Arrow key pressed:", ev.Key)
+					next := ev.Key == termbox.KeyArrowDown
+					Advance(selCtx, next)
 					redrawRows(table, rowsElement, selCtx)
-
 					for _, cl := range columns {
 						cl.WordRef.WordString = inspectContainer(selCtx.CurrentSelection.Hash, cl.Data)
 					}

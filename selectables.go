@@ -1,7 +1,5 @@
 package main
 
-import ()
-
 type Node struct {
 	Prev      *Node
 	Next      *Node
@@ -23,7 +21,42 @@ func NewSelectablesContext() *SelectableContext {
 	}
 }
 
+func Advance(context *SelectableContext, next bool) {
+	if !canAdvance(context) {
+		return
+	}
+	if context.CurrentSelection != nil {
+		logger.Println("Current selection: ", context.CurrentSelection.Hash)
+		if next {
+			logger.Println("Selecting .Next")
+			context.CurrentSelection = context.CurrentSelection.Next
+
+		} else {
+			logger.Println("Selecting .Prev")
+			context.CurrentSelection = context.CurrentSelection.Prev
+		}
+	} else if context.Head != nil {
+		logger.Println("Selecting .Head")
+		context.CurrentSelection = context.Head
+	} else {
+		panic("Head is missing! Where's my mind?")
+	}
+}
+
+func canAdvance(context *SelectableContext) bool {
+	if len(context.Nodes) == 0 {
+		// ip.WordString = ""
+		// todo: nullify all layout fields
+		logger.Println("len(selCtx.Nodes) == 0; break")
+		return false
+	}
+	return true
+}
+
 func DeleteSelectableNode(hash string, context *SelectableContext) {
+	if context.CurrentSelection != nil && context.CurrentSelection.Hash == hash {
+		context.CurrentSelection = nil
+	}
 	nodes := context.Nodes
 	tbd, e := nodes[hash]
 	if !e {
@@ -63,8 +96,4 @@ func AddSelectableNode(groupNode *Node, context *SelectableContext) {
 	context.Head.Prev = groupNode
 	context.Tail.Next = groupNode
 	context.Tail = groupNode
-
-	// fmt.Println(Tail == Head)
-	// fmt.Println(Head.Prev == Head.Next)
-
 }
