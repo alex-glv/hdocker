@@ -17,23 +17,15 @@ type Container struct {
 	currentGroup        string
 }
 
-type Drawable interface {
-	Draw()
-}
-
 type VisibleElement interface {
 	getMatrix() []RunePos
 }
 
 type ContainerElement struct {
-	RuneMatrixPos []RunePos
+	runeMatrixPos []RunePos
 	Group         string
 	Options       int
 	Element       VisibleElement
-}
-
-type SelectableElement interface {
-	getGroup() string
 }
 
 type Word struct {
@@ -41,18 +33,9 @@ type Word struct {
 	Width      int
 	Fg         termbox.Attribute
 	Bg         termbox.Attribute
-	WordChan   chan<- string
 }
 
 type LineBreakType struct{}
-
-type Table struct {
-	Cols      []string
-	Rows      []TableRow
-	ColWidths []int
-	state     []RunePos
-	Width     int
-}
 
 type RunePos struct {
 	X, Y int
@@ -61,11 +44,19 @@ type RunePos struct {
 	Bg   termbox.Attribute
 }
 
+type Table struct {
+	Cols      []string
+	Rows      []*TableRow
+	ColWidths []int
+	state     []RunePos
+	Width     int
+}
+
 type TableRow struct {
-	Cells    []string
-	Selected bool
-	Fg       termbox.Attribute
-	Bg       termbox.Attribute
+	Cells []string
+	Fg    termbox.Attribute
+	Bg    termbox.Attribute
+	Group string
 }
 
 func NewLayer() *Layer {
@@ -88,16 +79,6 @@ func NewWord(word string, width int, fg termbox.Attribute, bg termbox.Attribute)
 		Width:      width,
 		Fg:         fg,
 		Bg:         bg,
-	}
-}
-
-func NewWordDyn(word string, width int, fg termbox.Attribute, bg termbox.Attribute, newword chan<- string) *Word {
-	return &Word{
-		WordString: word,
-		Width:      width,
-		Fg:         fg,
-		Bg:         bg,
-		WordChan:   newword,
 	}
 }
 
@@ -166,7 +147,7 @@ func (c *Container) RecalculateRunes() {
 
 		} else {
 			matrix = addConstant(matrix, lastRune.X+1, lastRune.Y)
-			v.RuneMatrixPos = matrix
+			v.runeMatrixPos = matrix
 			lastRune = matrix[len(matrix)-1]
 		}
 	}
@@ -184,7 +165,7 @@ func (c *Container) Draw() {
 		}
 	}
 	for _, v := range c.ContainerElements {
-		for _, e := range v.RuneMatrixPos {
+		for _, e := range v.runeMatrixPos {
 			if e.X <= c.Width+c.X && e.Y <= c.Height+c.Y {
 				termbox.SetCell(
 					e.X,
@@ -236,12 +217,73 @@ func Space() *Word {
 	return NewWordDef(" ", 1)
 }
 
-type TableCols map[string]int
+func (t *Table) AddRow(row *TableRow) {
+	t.Rows = append(t.Rows, row)
+}
+
+func (t *Table) DeleteRow(group string) {
+	var rowIndex int
+	for i, row := range t.Rows {
+		if row.Group == group {
+			rowIndex = i
+			break
+		}
+	}
+	if !(rowIndex >= 0) {
+		return
+	}
+	newRows := append(t.Rows[:rowIndex], t.Rows[rowIndex+1:]...)
+	t.Rows = newRows
+}
+
+func (t *Table) SetColWidth(widths []int) {
+	if len(widths) != len(t.Cols) {
+		panic("widths is not correct for the table")
+	}
+	t.ColWidths = widths
+}
+
+func (t *Table) genTable() []VisibleElement {
+	// elements := make([]VisibleElement, 0)
+	// for i, col := range t.Cols {
+	// 	elements = append(elements, NewWordDef(col, t.ColWidths[i]), Space())
+	// }
+
+	// elements = append(elements, LineBreak())
+	// for _, row := range t.Rows {
+	// 	for y, word := range row.Cells {
+	// 		elements = append(elements, NewWord(word, t.ColWidths[y], row.Fg, row.Bg), Space())
+	// 	}
+	// 	elements = append(elements, LineBreak())
+	// }
+	// // logger.Println("%+v", elements)
+	// return elements
+	elements := []VisibleElement{NewWordDef("Test", 10), Space(), NewWordDef("Test2", 10)}
+	return elements
+}
+
+func (t *Table) getMatrix() []RunePos {
+	matrices := make([]RunePos, 0)
+	for _, matrix := range t.genTable() {
+		matrices = append(matrices, matrix.getMatrix()...)
+	}
+	// logger.Println(len(matrices))
+	return matrices
+}
 
 func (c *Container) NewTable(cols []string, widths []int) *Table {
 	return &Table{
 		Cols:      cols,
 		ColWidths: widths,
+		Rows:      make([]*TableRow, 0),
+	}
+}
+
+func NewTable(cols []string, widths []int) *Table {
+	return &Table{
+		Cols:      cols,
+		ColWidths: widths,
+		Rows:      make([]*TableRow, 0),
 	}
 }
 

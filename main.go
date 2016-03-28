@@ -170,10 +170,24 @@ func main() {
 	contInfo := NewContainer(width*1/3+1, 0, width*2/3, 30)
 	columns := Createlayout(contInfo)
 
-	layer.Add(headerElement)
-	layer.Add(rowsElement)
-	layer.Add(contInfo)
+	// layer.Add(headerElement)
+	// layer.Add(rowsElement)
+	// layer.Add(contInfo)
 
+	// experimental
+
+	expTable := NewTable([]string{"Col1", "Col2", "Col3"}, []int{10, 10, 10})
+	expTable.AddRow(NewTableRow([]string{"CCellR1", "CCellC2", "YCellY2"}...))
+	expTable.AddRow(NewTableRow([]string{"RCellR1", "RCellR2", "XCellX2"}...))
+
+	expContainer := NewContainer(0, 0, 60, 30)
+
+	expContainer.Add(NewWordDef("Tbl:", 4))
+	expContainer.Add(expTable)
+	layer.Add(expContainer)
+
+	layer.Draw()
+	termbox.Flush()
 	defer termbox.Close()
 	// draw()
 loop:
@@ -186,7 +200,7 @@ loop:
 				}
 				if ev.Key == termbox.KeyCtrlX {
 					killContainer(selCtx.CurrentSelection.Hash)
-					break loop
+					break
 				}
 
 				if ev.Key == termbox.KeyArrowDown || ev.Key == termbox.KeyArrowUp {
@@ -194,10 +208,13 @@ loop:
 					next := ev.Key == termbox.KeyArrowDown
 					Advance(selCtx, next)
 					redrawRows(table, rowsElement, selCtx)
+					if selCtx.CurrentSelection == nil {
+						break
+					}
 					for _, cl := range columns {
 						cl.WordRef.WordString = inspectContainer(selCtx.CurrentSelection.Hash, cl.Data)
 					}
-					layer.Draw()
+					// layer.Draw()
 					termbox.Flush()
 				}
 
@@ -205,7 +222,7 @@ loop:
 
 		case cnt := <-containers_queue:
 			updateTableRows(table, rowsElement, cnt, selCtx)
-			layer.Draw()
+			// layer.Draw()
 			termbox.Flush()
 		}
 	}
