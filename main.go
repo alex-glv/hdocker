@@ -88,7 +88,7 @@ func getRunningContainers() []docker.APIContainers {
 	return cnt
 }
 
-func updateTableRows(t *Table, lc *Container, cnt []docker.APIContainers, selCtx *SelectableContext) {
+func updateTableRows(t *Table, cnt []docker.APIContainers, selCtx *SelectableContext) {
 	foundIds := make(map[string]bool)
 	nodes := selCtx.Nodes
 	for _, c := range cnt {
@@ -106,31 +106,32 @@ func updateTableRows(t *Table, lc *Container, cnt []docker.APIContainers, selCtx
 	node := selCtx.Head
 
 	for i := 0; i < len(nodes); i++ {
-		lc.DeleteGroup(node.Hash)
+		t.DeleteRow(node.Hash) //
 		if _, e := foundIds[node.Hash]; !e {
 			DeleteSelectableNode(node.Hash, selCtx)
 		}
 		node = node.Next
 	}
-	logger.Println("new length:", len(selCtx.Nodes))
-	redrawRows(t, lc, selCtx)
+
+	redrawRows(t, selCtx)
 }
 
-func redrawRows(t *Table, lc *Container, selCtx *SelectableContext) {
+func redrawRows(t *Table, selCtx *SelectableContext) {
 	node := selCtx.Head
 	totalNodes := len(selCtx.Nodes)
-
+	var row *TableRow
 	for i := 0; i < totalNodes; i++ {
-		lc.DeleteGroup(node.Hash)
-
+		t.DeleteRow(node.Hash)
 		dockCont := node.Container.(docker.APIContainers)
-		row := NewTableRow(dockCont.ID, dockCont.Image)
+		row = t.AddRow(dockCont.ID, dockCont.Image)
+
+		row.Group = dockCont.ID
 		if node == selCtx.CurrentSelection {
 			row.Fg = termbox.ColorBlue
 		}
-		lc.AddTableRow(t, row, dockCont.ID)
 		node = node.Next
 	}
+
 }
 
 func main() {
@@ -156,38 +157,20 @@ func main() {
 		panic(err)
 	}
 	width, height := termbox.Size()
-	logger.Println("Canvas w:", width, ", h:", height)
+
 	selCtx := NewSelectablesContext()
 	layer := NewLayer()
 
-	cols := []string{"ID", "Image"}
-	widths := []int{(width * 1 / 3) * 1 / 4, (width * 1 / 3) * 3 / 4}
-
-	headerElement := NewContainer(0, 0, (width * 1 / 3), 1)
-	table := headerElement.NewTableWithHeader(cols, widths)
-	rowsElement := NewContainer(0, 1, (width * 1 / 3), height)
+	t := NewTable(0, 0, (width * 1 / 3), height,
+		[]string{"ID", "Image"},
+		[]int{(width * 1 / 3) * 1 / 4, (width * 1 / 3) * 3 / 4}) //ugly ratio-
 
 	contInfo := NewContainer(width*1/3+1, 0, width*2/3, 30)
 	columns := Createlayout(contInfo)
 
-	// layer.Add(headerElement)
-	// layer.Add(rowsElement)
-	// layer.Add(contInfo)
+	layer.Add(t)
+	layer.Add(contInfo)
 
-	// experimental
-
-	expTable := NewTable([]string{"Col1", "Col2", "Col3"}, []int{10, 10, 10})
-	expTable.AddRow(NewTableRow([]string{"CCellR1", "CCellC2", "YCellY2"}...))
-	expTable.AddRow(NewTableRow([]string{"RCellR1", "RCellR2", "XCellX2"}...))
-
-	expContainer := NewContainer(0, 0, 60, 30)
-
-	expContainer.Add(NewWordDef("Tbl:", 4))
-	expContainer.Add(expTable)
-	layer.Add(expContainer)
-
-	layer.Draw()
-	termbox.Flush()
 	defer termbox.Close()
 	// draw()
 loop:
@@ -207,22 +190,22 @@ loop:
 					logger.Println("Arrow key pressed:", ev.Key)
 					next := ev.Key == termbox.KeyArrowDown
 					Advance(selCtx, next)
-					redrawRows(table, rowsElement, selCtx)
+					redrawRows(t, selCtx)
 					if selCtx.CurrentSelection == nil {
 						break
 					}
 					for _, cl := range columns {
 						cl.WordRef.WordString = inspectContainer(selCtx.CurrentSelection.Hash, cl.Data)
 					}
-					// layer.Draw()
+					layer.Draw()
 					termbox.Flush()
 				}
 
 			}
 
 		case cnt := <-containers_queue:
-			updateTableRows(table, rowsElement, cnt, selCtx)
-			// layer.Draw()
+			updateTableRows(t, cnt, selCtx)
+			layer.Draw()
 			termbox.Flush()
 		}
 	}
