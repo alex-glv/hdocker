@@ -160,10 +160,11 @@ func main() {
 
 	selCtx := NewSelectablesContext()
 	layer := NewLayer()
-
+	tableColWidths := []int{(width * 1 / 3) * 1 / 4, (width * 1 / 3) * 3 / 4}
 	t := NewTable(0, 0, (width * 1 / 3), height,
 		[]string{"ID", "Image"},
-		[]int{(width * 1 / 3) * 1 / 4, (width * 1 / 3) * 3 / 4}) //ugly ratio-
+		tableColWidths,
+	)
 
 	contInfo := NewContainer(width*1/3+1, 0, width*2/3, 30)
 	columns := Createlayout(contInfo)
@@ -177,7 +178,17 @@ loop:
 	for {
 		select {
 		case ev := <-event_queue:
-			if ev.Type == termbox.EventKey {
+			if ev.Type == termbox.EventResize {
+				width, height = termbox.Size()
+				t.Width = (width * 1 / 3)
+				t.SetColWidth(tableColWidths)
+				contInfo.X = width*1/3 + 1
+				contInfo.Width = width * 2 / 3
+				contInfo.ContainerElements = make([]*ContainerElement, 0)
+				columns = Createlayout(contInfo)
+
+			} else if ev.Type == termbox.EventKey {
+
 				if ev.Key == termbox.KeyEsc {
 					break loop
 				}
