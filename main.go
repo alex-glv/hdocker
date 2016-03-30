@@ -161,12 +161,13 @@ func main() {
 	selCtx := NewSelectablesContext()
 	layer := NewLayer()
 	tableColWidths := []int{(width * 1 / 3) * 1 / 4, (width * 1 / 3) * 3 / 4}
-	t := NewTable(0, 0, (width * 1 / 3), height,
+
+	t := NewTable(&Dimensions{0, 0, (width * 1 / 3), height},
 		[]string{"ID", "Image"},
 		tableColWidths,
 	)
 
-	contInfo := NewContainer(width*1/3+1, 0, width*2/3, 30)
+	contInfo := NewContainer(&Dimensions{width*1/3 + 1, 0, width * 2 / 3, 30})
 	columns := Createlayout(contInfo)
 
 	layer.Add(t)
@@ -180,10 +181,10 @@ loop:
 		case ev := <-event_queue:
 			if ev.Type == termbox.EventResize {
 				width, height = termbox.Size()
-				t.Width = (width * 1 / 3)
+				t.getDimensions().Width = (width * 1 / 3)
 				t.SetColWidth(tableColWidths)
-				contInfo.X = width*1/3 + 1
-				contInfo.Width = width * 2 / 3
+				contInfo.getDimensions().X = width*1/3 + 1
+				contInfo.getDimensions().Width = width * 2 / 3
 				contInfo.ContainerElements = make([]*ContainerElement, 0)
 				columns = Createlayout(contInfo)
 
@@ -209,7 +210,7 @@ loop:
 						cl.WordRef.WordString = inspectContainer(selCtx.CurrentSelection.Hash, cl.Data)
 					}
 					layer.Draw()
-					termbox.Flush()
+					layer.Flush()
 				}
 
 			}
@@ -217,7 +218,7 @@ loop:
 		case cnt := <-containers_queue:
 			updateTableRows(t, cnt, selCtx)
 			layer.Draw()
-			termbox.Flush()
+			layer.Flush()
 		}
 	}
 }

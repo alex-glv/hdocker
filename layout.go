@@ -26,15 +26,15 @@ func Createlayout(infoBox *Container) []Column {
 	if err != nil {
 		panic(err)
 	}
-	logger.Println("Init CreateLayout with: W:", infoBox.Width, ", Start:", infoBox.X)
+	logger.Println("Init CreateLayout with: W:", infoBox.getDimensions().Width, ", Start:", infoBox.getDimensions().X)
 	columns := ParseLayout(dat)
 	curFill := float32(0)
 	curValues := make([]int, 0, 0)
 	logger.Println("Columns:")
 	logger.Println(columns)
 	for i, v := range columns {
-		logger.Println("Adding:", v.Title, ", w:", int(v.Width*float32(infoBox.Width)))
-		infoBox.Add(NewWordDef(v.Title, int(v.Width*float32(infoBox.Width))))
+		logger.Println("Adding:", v.Title, ", w:", int(v.Width*float32(infoBox.getDimensions().Width)))
+		infoBox.Add(NewWordDef(v.Title, int(v.Width*float32(infoBox.getDimensions().Width))))
 		infoBox.Add(Space())
 		curValues = append(curValues, i)
 		curFill = curFill + v.Width
@@ -42,10 +42,10 @@ func Createlayout(infoBox *Container) []Column {
 		if curFill == 1 || i == len(columns)-1 {
 			infoBox.Add(LineBreak())
 			for _, ci := range curValues {
-				logger.Println("Dumping:", columns[ci].Data, ", w:", int(columns[ci].Width*float32(infoBox.Width)))
+				logger.Println("Dumping:", columns[ci].Data, ", w:", int(columns[ci].Width*float32(infoBox.getDimensions().Width)))
 				// logger.Println(ci)
 
-				columns[ci].WordRef = NewWordDef(columns[ci].Data, int(columns[ci].Width*float32(infoBox.Width)))
+				columns[ci].WordRef = NewWordDef(columns[ci].Data, int(columns[ci].Width*float32(infoBox.getDimensions().Width)))
 				infoBox.Add(columns[ci].WordRef)
 				infoBox.Add(Space())
 

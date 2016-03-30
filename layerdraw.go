@@ -4,16 +4,15 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
-var DEFAULT_GROUP = "default"
-
 type Layer struct {
 	added      int
 	Containers []LayerElement
+	buff       []RunePos
 }
 
 type Container struct {
-	X, Y, Width, Height int
-	ContainerElements   []*ContainerElement
+	Dimensions        *Dimensions
+	ContainerElements []*ContainerElement
 }
 
 type Dimensions struct {
@@ -52,21 +51,6 @@ type RunePos struct {
 	Bg   termbox.Attribute
 }
 
-type Table struct {
-	Cols                []string
-	Rows                []*TableRow
-	ColWidths           []int
-	state               []RunePos
-	X, Y, Width, Height int
-}
-
-type TableRow struct {
-	Cells []string
-	Fg    termbox.Attribute
-	Bg    termbox.Attribute
-	Group string
-}
-
 func NewLayer() *Layer {
 	els := make([]LayerElement, 0)
 	return &Layer{
@@ -97,29 +81,13 @@ func LineBreak() *LineBreakType {
 	return &LineBreakType{}
 }
 
-func NewContainer(x, y, width, height int) *Container {
+func NewContainer(dm *Dimensions) *Container {
 	return &Container{
-		X:      x,
-		Y:      y,
-		Width:  width,
-		Height: height,
-
+		Dimensions:        dm,
 		ContainerElements: make([]*ContainerElement, 0),
 	}
 }
 
-func NewTableRow(fields ...string) *TableRow {
-	row := &TableRow{
-		Cells: fields,
-	}
-
-	return row
-}
-
-func (l *Layer) Add(el LayerElement) {
-	l.Containers = append(l.Containers, el)
-
-}
 func (c *Container) Add(el VisibleElement) {
 	cel := newContainerElement(el)
 	c.ContainerElements = append(c.ContainerElements, cel)
@@ -127,12 +95,7 @@ func (c *Container) Add(el VisibleElement) {
 
 // LayerElement implementation
 func (c *Container) getDimensions() *Dimensions {
-	return &Dimensions{
-		X:      c.X,
-		Y:      c.Y,
-		Height: c.Height,
-		Width:  c.Width,
-	}
+	return c.Dimensions
 }
 
 func (c *Container) getElements() []*ContainerElement {
@@ -140,6 +103,15 @@ func (c *Container) getElements() []*ContainerElement {
 }
 
 //
+
+func (c *Container) EmptyRunePos() RunePos {
+	return NewRunePos(c.Dimensions.X, c.Dimensions.Y, 0, 0, 0)
+}
+
+func (l *Layer) Add(el LayerElement) {
+	l.Containers = append(l.Containers, el)
+
+}
 
 func (l *Layer) RecalculateRunes(c LayerElement) []*ContainerElement {
 	vsbels := make([]*ContainerElement, 0)
@@ -162,12 +134,19 @@ func (l *Layer) RecalculateRunes(c LayerElement) []*ContainerElement {
 	return vsbels
 }
 
-func (c *Container) EmptyRunePos() RunePos {
-	return NewRunePos(c.X, c.Y, 0, 0, 0)
+func (l *Layer) Flush() {
+	for _, v := range l.buff {
+		termbox.SetCell(v.X, v.Y, v.Char, v.Fg, v.Bg)
+	}
+	termbox.Flush()
+}
+
+func (l *Layer) GetBuff() []RunePos {
+	return l.buff
 }
 
 func (l *Layer) Draw() {
-
+	l.buff = make([]RunePos, 0)
 	for _, c := range l.Containers {
 		dims := c.getDimensions()
 		vsbels := l.RecalculateRunes(c)
@@ -178,15 +157,8 @@ func (l *Layer) Draw() {
 		}
 		for _, v := range vsbels {
 			for _, e := range v.runeMatrixPos {
-
 				if e.X <= dims.Width+dims.X && e.Y <= dims.Height+dims.Y {
-					termbox.SetCell(
-						e.X,
-						e.Y,
-						e.Char,
-						e.Fg,
-						e.Bg,
-					)
+					l.buff = append(l.buff, e)
 				}
 			}
 
@@ -223,95 +195,6 @@ func NewRunePos(x, y int, ch byte, fg, bg termbox.Attribute) RunePos {
 
 func Space() *Word {
 	return NewWordDef(" ", 1)
-}
-
-func (t *Table) AddRow(fields ...string) *TableRow {
-	row := &TableRow{
-		Cells: fields,
-	}
-	t.Rows = append(t.Rows, row)
-
-	return row
-}
-
-func (t *Table) DeleteRow(group string) {
-	var rowIndex int = -1
-	if len(t.Rows) == 0 {
-		return
-	}
-	for i, row := range t.Rows {
-		if row.Group == group {
-			rowIndex = i
-			break
-		}
-	}
-
-	if rowIndex == -1 {
-		return
-	}
-
-	t.Rows = append(t.Rows[:rowIndex], t.Rows[rowIndex+1:]...)
-}
-
-func (t *Table) SetColWidth(widths []int) {
-	if len(widths) != len(t.Cols) {
-		panic("widths is not correct for the table")
-	}
-	t.ColWidths = widths
-}
-
-func (t *Table) genTable() []VisibleElement {
-	elements := make([]VisibleElement, 0)
-	for i, col := range t.Cols {
-		elements = append(elements, NewWordDef(col, t.ColWidths[i]), Space())
-	}
-
-	elements = append(elements, LineBreak())
-
-	for _, row := range t.Rows {
-		for y, word := range row.Cells {
-			elements = append(elements, NewWord(word, t.ColWidths[y], row.Fg, row.Bg), Space())
-		}
-		elements = append(elements, LineBreak())
-	}
-
-	return elements
-
-}
-
-// LayerElement implementation
-
-func (t *Table) getDimensions() *Dimensions {
-	return &Dimensions{
-		X:      t.X,
-		Y:      t.Y,
-		Height: t.Height,
-		Width:  t.Width,
-	}
-}
-
-func (t *Table) getElements() []*ContainerElement {
-	var cels []*ContainerElement
-	for _, el := range t.genTable() {
-		contel := newContainerElement(el)
-		cels = append(cels, contel)
-	}
-
-	return cels
-}
-
-//
-
-func NewTable(x, y, width, height int, cols []string, widths []int) *Table {
-	return &Table{
-		Cols:      cols,
-		ColWidths: widths,
-		Rows:      make([]*TableRow, 0),
-		X:         x,
-		Y:         y,
-		Width:     width,
-		Height:    height,
-	}
 }
 
 func appendRunePosMatrix(m1, m2 []RunePos) []RunePos {
