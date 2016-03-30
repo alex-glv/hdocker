@@ -20,19 +20,15 @@ func TestAddWord(t *testing.T) {
 	}
 }
 
-func TestWordPrintedPadding(t *testing.T) {
-	layer := NewLayer()
-	testdata := []struct {
-		Word   string
-		Length int
-	}{
-		{"Test", 10},
-		{"More", 10},
-	}
-	container := NewContainer(&Dimensions{0, 0, 20, 1})
+type testdata struct {
+	Word   string
+	Length int
+}
+
+func givenTestDataGetExpectedBytes(tstd []testdata) []byte {
 	expected := make([]byte, 0)
-	for _, v := range testdata {
-		container.Add(NewWordDef(v.Word, v.Length))
+	for _, v := range tstd {
+
 		for i := 0; i < v.Length; i++ {
 			if len(v.Word) > i {
 				expected = append(expected, byte(v.Word[i]))
@@ -40,6 +36,21 @@ func TestWordPrintedPadding(t *testing.T) {
 				expected = append(expected, byte(' '))
 			}
 		}
+	}
+	return expected
+}
+
+func TestWordPrintedPadding(t *testing.T) {
+	layer := NewLayer()
+	tstdt := []testdata{
+		{"Test", 10},
+		{"More", 10},
+		{"TooLong", 5},
+	}
+	expected := givenTestDataGetExpectedBytes(tstdt)
+	container := NewContainer(&Dimensions{0, 0, 25, 1})
+	for _, v := range tstdt {
+		container.Add(NewWordDef(v.Word, v.Length))
 	}
 
 	layer.Add(container)
