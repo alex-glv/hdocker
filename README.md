@@ -21,3 +21,4 @@ hdocker can:
  
 Planned features:
 - Show disk space usage
+- Emacs / Vim keybindings for navigation
