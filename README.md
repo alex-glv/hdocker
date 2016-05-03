@@ -3,7 +3,7 @@ hdocker to docker is what htop is to top
 
 # Overview
 
-hdocker presents an interactive view of the running containers.
+hdocker presents an interactive realtime view of the running containers.
 The program created mostly out of personal need to quickly kill a container,
 or inspect the container's details, like command or network setting.
 
@@ -20,5 +20,6 @@ hdocker can:
  - Kill a docker container
  
 Planned features:
+- Support for DOCKER_HOST environment variable
 - Show disk space usage
 - Emacs / Vim keybindings for navigation
